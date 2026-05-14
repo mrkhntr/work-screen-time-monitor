@@ -45,7 +45,7 @@ jobs:
           BUILD=$(( MAJOR * 1000000 + MINOR * 1000 + PATCH ))
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
-          echo "zip_name=WorkScreenTimeApp-$VERSION.zip" >> "$GITHUB_OUTPUT"
+          echo "dmg_name=WorkScreenTimeApp-$VERSION.dmg" >> "$GITHUB_OUTPUT"
 
       - name: Install website dependencies
         working-directory: website
@@ -54,16 +54,17 @@ jobs:
       - name: Test
         run: swift test
 
-      - name: Build app zip
+      - name: Build app dmg
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_PATH="$RUNNER_TEMP/${{ steps.version.outputs.zip_name }}"
+          brew install create-dmg
+          DMG_PATH="$RUNNER_TEMP/${{ steps.version.outputs.dmg_name }}"
           scripts/build_app.sh \
             --version "${{ steps.version.outputs.version }}" \
             --build "${{ steps.version.outputs.build }}" \
-            --zip "$ZIP_PATH"
-          echo "ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
+            --dmg "$DMG_PATH"
+          echo "DMG_PATH=$DMG_PATH" >> "$GITHUB_ENV"
 
       - name: Create or update GitHub Release
         env:
@@ -71,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ASSET_LABEL="${ZIP_PATH}#${{ steps.version.outputs.zip_name }}"
+          ASSET_LABEL="${DMG_PATH}#${{ steps.version.outputs.dmg_name }}"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "$ASSET_LABEL" --clobber
           else
@@ -92,7 +93,7 @@ jobs:
             exit 1
           fi
 
-          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.version.outputs.zip_name }}"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.version.outputs.dmg_name }}"
           
           # Generate clean HTML release notes for Sparkle
           mkdir -p website/static/release-notes

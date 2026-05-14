@@ -11,19 +11,20 @@ FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 DIRECT_DIR="$ROOT_DIR/.build/direct"
 APP_EXECUTABLE="$MACOS_DIR/$APP_NAME"
 INFO_PLIST="$CONTENTS_DIR/Info.plist"
-ZIP_PATH="${ZIP_PATH:-$HOME/Downloads/$APP_NAME.zip}"
-CREATE_ZIP=1
+PKG_PATH="${PKG_PATH:-$HOME/Downloads/$APP_NAME.dmg}"
+CREATE_ZIP=0
+CREATE_DMG=1
 APP_VERSION="${APP_VERSION:-}"
 APP_BUILD="${APP_BUILD:-}"
 
 usage() {
   cat >&2 <<USAGE
-Usage: $0 [--version VERSION] [--build BUILD] [--zip PATH] [--no-zip]
+Usage: $0 [--version VERSION] [--build BUILD] [--dmg PATH | --zip PATH] [--no-zip]
 
 Environment overrides:
   APP_VERSION  Version string for CFBundleShortVersionString
   APP_BUILD    Build number for CFBundleVersion
-  ZIP_PATH     Output zip path
+  PKG_PATH     Output dmg or zip path
 USAGE
 }
 
@@ -64,12 +65,21 @@ while [[ $# -gt 0 ]]; do
       APP_BUILD="${2:-}"
       shift 2
       ;;
+    --dmg)
+      CREATE_ZIP=0
+      CREATE_DMG=1
+      PKG_PATH="${2:-}"
+      shift 2
+      ;;
     --zip)
-      ZIP_PATH="${2:-}"
+      CREATE_ZIP=1
+      CREATE_DMG=0
+      PKG_PATH="${2:-}"
       shift 2
       ;;
     --no-zip)
       CREATE_ZIP=0
+      CREATE_DMG=0
       shift
       ;;
     -h|--help)
@@ -202,8 +212,8 @@ codesign --force --deep --sign - "$APP_DIR"
 echo "Built $APP_DIR"
 
 if [[ "$CREATE_ZIP" -eq 1 ]]; then
-  mkdir -p "$(dirname "$ZIP_PATH")"
-  rm -f "$ZIP_PATH"
+  mkdir -p "$(dirname "$PKG_PATH")"
+  rm -f "$PKG_PATH"
 
   # Create a DMG folder structure
   DMG_STAGING="$ROOT_DIR/.build/dmg_staging"
@@ -217,7 +227,35 @@ if [[ "$CREATE_ZIP" -eq 1 ]]; then
   ln -s /Applications "$DMG_STAGING/Applications"
 
   # Create a zip of the folder containing the app and the Applications link
-  ditto -c -k "$DMG_STAGING" "$ZIP_PATH"
+  ditto -c -k "$DMG_STAGING" "$PKG_PATH"
 
-  echo "Exported to $ZIP_PATH (contains Applications shortcut)"
+  echo "Exported to $PKG_PATH (contains Applications shortcut)"
+elif [[ "$CREATE_DMG" -eq 1 ]]; then
+  mkdir -p "$(dirname "$PKG_PATH")"
+  rm -f "$PKG_PATH"
+
+  if ! command -v create-dmg >/dev/null 2>&1; then
+    echo "create-dmg not found. Please install it with 'brew install create-dmg'" >&2
+    exit 1
+  fi
+  
+  # create-dmg does the staging and linking automatically.
+  # We just need to give it a folder containing our app.
+  DMG_STAGING="$ROOT_DIR/.build/dmg_staging_src"
+  rm -rf "$DMG_STAGING"
+  mkdir -p "$DMG_STAGING"
+  ditto "$APP_DIR" "$DMG_STAGING/$APP_NAME.app"
+
+  create-dmg \
+    --volname "$BUNDLE_NAME_XML" \
+    --window-pos 200 120 \
+    --window-size 600 400 \
+    --icon-size 100 \
+    --icon "$APP_NAME.app" 150 190 \
+    --hide-extension "$APP_NAME.app" \
+    --app-drop-link 450 190 \
+    "$PKG_PATH" \
+    "$DMG_STAGING"
+
+  echo "Exported to $PKG_PATH"
 fi
