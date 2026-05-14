@@ -137,7 +137,7 @@ ditto "$SPARKLE_FRAMEWORK_SRC" "$FRAMEWORKS_DIR/Sparkle.framework"
 APP_NAME_XML="$(xml_escape "$APP_NAME")"
 BUNDLE_NAME_XML="$(xml_escape "Work Screen Time")"
 BUNDLE_ID_XML="$(xml_escape "app.workscreentime.WorkScreenTimeApp")"
-SPARKLE_FEED_URL_XML="$(xml_escape "https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml")"
+SPARKLE_FEED_URL_XML="$(xml_escape "https://mrkhntr.com/work-screen-time-monitor/appcast.xml")"
 SPARKLE_PUBLIC_KEY_XML="$(xml_escape "JP0FniXbX8CXCxFyv/Q8yGmWaRM9svMSnMXH5NhSuOo=")"
 
 cat > "$INFO_PLIST" <<PLIST

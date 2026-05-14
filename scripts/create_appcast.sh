@@ -116,7 +116,7 @@ cat > "$OUTPUT_PATH" <<XML
   xmlns:dc="http://purl.org/dc/elements/1.1/">
   <channel>
     <title>$TITLE_XML Updates</title>
-    <link>https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml</link>
+    <link>https://mrkhntr.com/work-screen-time-monitor/appcast.xml</link>
     <description>Updates for $TITLE_XML.</description>
     <language>en</language>
     <item>

@@ -7,10 +7,19 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: macos-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Check out repository
@@ -85,21 +94,28 @@ jobs:
             --output "$RUNNER_TEMP/appcast.xml" \
             --sign-update ".build/artifacts/sparkle/Sparkle/bin/sign_update"
 
-      - name: Publish appcast to main
+      - name: Prepare GitHub Pages artifact
         shell: bash
         run: |
           set -euo pipefail
-          cp "$RUNNER_TEMP/appcast.xml" "$RUNNER_TEMP/appcast-to-publish.xml"
-          git fetch origin main
-          git checkout main
-          mkdir -p releases/work-screen-time
-          cp "$RUNNER_TEMP/appcast-to-publish.xml" releases/work-screen-time/appcast.xml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases/work-screen-time/appcast.xml
-          if git diff --cached --quiet; then
-            echo "Appcast unchanged."
-          else
-            git commit -m "Update appcast for $GITHUB_REF_NAME"
-            git push origin main
-          fi
+          PAGES_DIR="$RUNNER_TEMP/pages"
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.version.outputs.zip_name }}"
+          RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+          scripts/create_pages_site.sh \
+            --output "$PAGES_DIR" \
+            --appcast "$RUNNER_TEMP/appcast.xml" \
+            --version "${{ steps.version.outputs.version }}" \
+            --download-url "$DOWNLOAD_URL" \
+            --release-notes-url "$RELEASE_NOTES_URL"
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/pages
+
+      - name: Deploy appcast to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

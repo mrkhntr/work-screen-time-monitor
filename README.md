@@ -78,7 +78,7 @@ For unsigned friend/team builds, macOS may require right-clicking the app and ch
 
 The app uses Sparkle 2 for update checks. Installed copies do not need git, source files, Xcode, or Swift.
 
-- Feed URL: `https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml`
+- Feed URL: `https://mrkhntr.com/work-screen-time-monitor/appcast.xml`
 - Check interval: daily
 - Install behavior: Sparkle asks before installing an available update.
 - Update verification: Sparkle EdDSA signatures.
@@ -110,15 +110,22 @@ The GitHub Actions release workflow will:
 - build and zip `WorkScreenTimeApp.app`;
 - create or update the matching GitHub Release;
 - sign the zip with the Sparkle private key secret;
-- update `releases/work-screen-time/appcast.xml` on `main`.
+- deploy a friend-facing download page and `appcast.xml` to this repo's GitHub Pages project site.
 
-Your `mrkhntr.com` hosting must serve that appcast file at:
+GitHub Pages serves the download page and appcast at:
 
 ```text
-https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml
+https://mrkhntr.com/work-screen-time-monitor/
+https://mrkhntr.com/work-screen-time-monitor/appcast.xml
 ```
 
-The workflow commits the appcast into this repo under `releases/work-screen-time/`. GitHub Pages is configured to serve this repo's `main` branch from the repo root with `CNAME` set to `workscreen.mrkhntr.com`.
+The workflow uses GitHub Pages project-site routing for this repo, matching the pattern used by `mrk-app`. No app repo `CNAME` is needed.
+
+Set the Sparkle repository secret before pushing a release tag:
+
+```sh
+scripts/set_github_sparkle_secret.sh
+```
 
 ## Start On Login
 
