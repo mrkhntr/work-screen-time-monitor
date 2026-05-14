@@ -26,12 +26,21 @@ function DownloadHero() {
       </section>
 
       <section className={styles.panel} aria-label="Install notes">
-        <h2>For friends trying it</h2>
+        <h2>Installation</h2>
+        <div className={styles.installGuide}>
+          <img src="img/install-guide.svg" alt="Drag Work Screen Time to Applications" className={styles.guideImage} />
+        </div>
         <p>
-          Download the zip, unzip it, and open Work Screen Time. Since this
-          early build is not Developer ID signed, macOS may ask you to
-          right-click the app and choose Open the first time.
+          Download and unzip the app, then drag <strong>Work Screen Time</strong> into the <strong>Applications</strong> folder using the shortcut provided.
         </p>
+        <p>
+          As this build is unsigned, macOS Gatekeeper may block it. To open:
+        </p>
+        <ul>
+          <li>Right-click (Control-click) the app in Finder and choose <strong>Open</strong>.</li>
+          <li>If blocked, go to <strong>System Settings</strong> &gt; <strong>Privacy & Security</strong> and click <strong>Open Anyway</strong>.</li>
+          <li>Or run: <code>xattr -rd com.apple.quarantine /Applications/WorkScreenTimeApp.app</code></li>
+        </ul>
         <div className={styles.links}>
           <Link href={releaseNotesUrl}>Release notes</Link>
           <a href="appcast.xml">Sparkle appcast</a>

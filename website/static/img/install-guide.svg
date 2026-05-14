@@ -1,0 +1,14 @@
+<svg width="400" height="200" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="400" height="200" rx="10" fill="#f0f0f0"/>
+  <!-- App Icon Placeholder -->
+  <rect x="50" y="70" width="60" height="60" rx="12" fill="#007AFF"/>
+  <text x="80" y="150" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#333">Work Screen Time</text>
+  
+  <!-- Arrow -->
+  <path d="M140 100 H240 M230 90 L245 100 L230 110" fill="none" stroke="#666" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Applications Folder Icon Placeholder -->
+  <rect x="280" y="70" width="60" height="60" rx="5" fill="#A2A2A2"/>
+  <path d="M280 80 H340 V75 Q340 70 335 70 H285 Q280 70 280 75 Z" fill="#8E8E8E"/>
+  <text x="310" y="150" font-family="sans-serif" font-size="12" text-anchor="middle" fill="#333">Applications</text>
+</svg>

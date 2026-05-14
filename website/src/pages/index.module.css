@@ -98,3 +98,18 @@
     padding: 48px 0;
   }
 }
+
+.installGuide {
+  margin: 16px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.guideImage {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+  padding: 8px;
+  border: 1px solid var(--ifm-color-emphasis-200);
+}

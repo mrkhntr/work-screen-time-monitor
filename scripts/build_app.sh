@@ -204,6 +204,20 @@ echo "Built $APP_DIR"
 if [[ "$CREATE_ZIP" -eq 1 ]]; then
   mkdir -p "$(dirname "$ZIP_PATH")"
   rm -f "$ZIP_PATH"
-  ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
-  echo "Exported to $ZIP_PATH"
+
+  # Create a DMG folder structure
+  DMG_STAGING="$ROOT_DIR/.build/dmg_staging"
+  rm -rf "$DMG_STAGING"
+  mkdir -p "$DMG_STAGING"
+
+  # Use ditto to copy the app to the staging area
+  ditto "$APP_DIR" "$DMG_STAGING/$APP_NAME.app"
+
+  # Create a symbolic link to /Applications
+  ln -s /Applications "$DMG_STAGING/Applications"
+
+  # Create a zip of the folder containing the app and the Applications link
+  ditto -c -k "$DMG_STAGING" "$ZIP_PATH"
+
+  echo "Exported to $ZIP_PATH (contains Applications shortcut)"
 fi

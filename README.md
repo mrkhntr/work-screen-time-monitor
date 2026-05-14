@@ -72,7 +72,18 @@ open .build/WorkScreenTimeApp.app
 
 The first launch should request notification permission. If you miss it, enable notifications in System Settings.
 
-For unsigned friend/team builds, macOS may require right-clicking the app and choosing **Open** the first time.
+For unsigned friend/team builds, newer macOS versions may block the first launch. Recommended workarounds:
+
+- Try Finder: right‑click (or Control‑click) the app and choose **Open**, then confirm **Open** in the dialog. This still works on many macOS releases.
+- If that doesn't appear, open **System Settings** (or **System Preferences** on older macOS) → **Privacy & Security** (or **Security & Privacy**) and look for an "Open Anyway" / "Allow" button for the blocked app under the General/Security section; click it and re-open the app.
+- Advanced / CLI option: remove the quarantine attribute and open from Terminal:
+
+```bash
+xattr -r -d com.apple.quarantine .build/WorkScreenTimeApp.app
+open .build/WorkScreenTimeApp.app
+```
+
+Note: notarized or Developer ID–signed builds do not require these steps; Gatekeeper behavior varies by macOS version and security settings.
 
 ## Auto-Updates
 
@@ -102,6 +113,28 @@ Releases are tag-driven. Push a semantic version tag:
 ```sh
 git tag v1.0.17
 git push origin v1.0.17
+```
+
+When creating the GitHub Release on the repository after pushing the tag, please add a clear release description that explains what this release does. The CI creates artifacts and performs several actions — including building the app, running tests, signing the packaged zip with the Sparkle key, and publishing the updated appcast and website — so the release notes should document those items for reviewers and users.
+
+Suggested release notes template:
+
+```
+Summary: Short one-line overview of the change (bugfix / features / maintenance).
+
+Includes:
+- Built app bundle: `.build/WorkScreenTimeApp.app`
+- Signed zip: `WorkScreenTimeApp-<version>.zip` (Sparkle-signed)
+- Updated appcast: `appcast.xml` (Sparkle feed) deployed to website/static
+
+Checks performed by CI:
+- `swift test` run in CI
+- Docusaurus site built and deployed
+- Signed release artifact using `SPARKLE_PRIVATE_KEY` secret
+
+Notes for users/admins:
+- If you install a locally-built unsigned app, allow via Finder → Open on first run.
+- Sparkle will verify updates using the embedded public key.
 ```
 
 The GitHub Actions release workflow will:
