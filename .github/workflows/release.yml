@@ -73,12 +73,25 @@ jobs:
         run: |
           set -euo pipefail
           ASSET_LABEL="${DMG_PATH}#${{ steps.version.outputs.dmg_name }}"
+          
+          # Fetch all tags so we can determine the previous one
+          git fetch --tags --force
+          
+          # Get commits since the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          if [[ -n "$PREV_TAG" ]]; then
+            NOTES=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s")
+          else
+            NOTES=$(git log --pretty=format:"- %s")
+          fi
+          
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "$ASSET_LABEL" --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes "$NOTES"
           else
             gh release create "$GITHUB_REF_NAME" "$ASSET_LABEL" \
               --title "Work Screen Time ${{ steps.version.outputs.version }}" \
-              --generate-notes
+              --notes "$NOTES"
           fi
 
       - name: Generate Sparkle appcast
@@ -106,7 +119,7 @@ jobs:
           scripts/create_appcast.sh \
             --version "${{ steps.version.outputs.version }}" \
             --build "${{ steps.version.outputs.build }}" \
-            --zip "$ZIP_PATH" \
+            --dmg "$DMG_PATH" \
             --download-url "$DOWNLOAD_URL" \
             --release-notes-url "$RELEASE_NOTES_URL" \
             --output "$RUNNER_TEMP/appcast.xml" \
@@ -116,7 +129,7 @@ jobs:
         working-directory: website
         env:
           WORK_SCREEN_TIME_VERSION: ${{ steps.version.outputs.version }}
-          WORK_SCREEN_TIME_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.version.outputs.zip_name }}
+          WORK_SCREEN_TIME_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.version.outputs.dmg_name }}
           WORK_SCREEN_TIME_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
         shell: bash
         run: |

@@ -9,11 +9,11 @@ RELEASE_NOTES_URL=""
 SIGN_UPDATE_PATH=""
 TITLE="Work Screen Time"
 VERSION=""
-ZIP_PATH=""
+DMG_PATH=""
 
 usage() {
   cat >&2 <<USAGE
-Usage: $0 --version VERSION --build BUILD --zip PATH --download-url URL --release-notes-url URL --output PATH --sign-update PATH
+Usage: $0 --version VERSION --build BUILD --dmg PATH --download-url URL --release-notes-url URL --output PATH --sign-update PATH
 
 If SPARKLE_PRIVATE_KEY is set, it is passed to sign_update through stdin.
 Otherwise, sign_update uses the local Keychain account.
@@ -64,8 +64,8 @@ while [[ $# -gt 0 ]]; do
       VERSION="${2:-}"
       shift 2
       ;;
-    --zip)
-      ZIP_PATH="${2:-}"
+    --dmg)
+      DMG_PATH="${2:-}"
       shift 2
       ;;
     -h|--help)
@@ -79,13 +79,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$VERSION" || -z "$BUILD" || -z "$ZIP_PATH" || -z "$DOWNLOAD_URL" || -z "$RELEASE_NOTES_URL" || -z "$OUTPUT_PATH" || -z "$SIGN_UPDATE_PATH" ]]; then
+if [[ -z "$VERSION" || -z "$BUILD" || -z "$DMG_PATH" || -z "$DOWNLOAD_URL" || -z "$RELEASE_NOTES_URL" || -z "$OUTPUT_PATH" || -z "$SIGN_UPDATE_PATH" ]]; then
   usage
   exit 64
 fi
 
-if [[ ! -f "$ZIP_PATH" ]]; then
-  echo "Zip file not found: $ZIP_PATH" >&2
+if [[ ! -f "$DMG_PATH" ]]; then
+  echo "Dmg file not found: $DMG_PATH" >&2
   exit 1
 fi
 
@@ -95,9 +95,9 @@ if [[ ! -x "$SIGN_UPDATE_PATH" ]]; then
 fi
 
 if [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
-  SIGNATURE_OUTPUT="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE_PATH" --ed-key-file - "$ZIP_PATH")"
+  SIGNATURE_OUTPUT="$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SIGN_UPDATE_PATH" --ed-key-file - "$DMG_PATH")"
 else
-  SIGNATURE_OUTPUT="$("$SIGN_UPDATE_PATH" --account "$ACCOUNT" "$ZIP_PATH")"
+  SIGNATURE_OUTPUT="$("$SIGN_UPDATE_PATH" --account "$ACCOUNT" "$DMG_PATH")"
 fi
 
 PUB_DATE="$(LC_ALL=C TZ=UTC date '+%a, %d %b %Y %H:%M:%S +0000')"
