@@ -24,6 +24,13 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "23"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
       - name: Derive version
         id: version
         shell: bash
@@ -39,6 +46,10 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "build=$BUILD" >> "$GITHUB_OUTPUT"
           echo "zip_name=WorkScreenTimeApp-$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Install website dependencies
+        working-directory: website
+        run: npm ci
 
       - name: Test
         run: swift test
@@ -91,19 +102,17 @@ jobs:
             --output "$RUNNER_TEMP/appcast.xml" \
             --sign-update ".build/artifacts/sparkle/Sparkle/bin/sign_update"
 
-      - name: Prepare GitHub Pages artifact
+      - name: Build Docusaurus download site
+        working-directory: website
+        env:
+          WORK_SCREEN_TIME_VERSION: ${{ steps.version.outputs.version }}
+          WORK_SCREEN_TIME_DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ steps.version.outputs.zip_name }}
+          WORK_SCREEN_TIME_RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}
         shell: bash
         run: |
           set -euo pipefail
-          PAGES_DIR="$RUNNER_TEMP/pages"
-          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.version.outputs.zip_name }}"
-          RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
-          scripts/create_pages_site.sh \
-            --output "$PAGES_DIR" \
-            --appcast "$RUNNER_TEMP/appcast.xml" \
-            --version "${{ steps.version.outputs.version }}" \
-            --download-url "$DOWNLOAD_URL" \
-            --release-notes-url "$RELEASE_NOTES_URL"
+          cp "$RUNNER_TEMP/appcast.xml" static/appcast.xml
+          npm run build
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -111,7 +120,7 @@ jobs:
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ${{ runner.temp }}/pages
+          path: website/build
 
       - name: Deploy download page to GitHub Pages
         id: deployment

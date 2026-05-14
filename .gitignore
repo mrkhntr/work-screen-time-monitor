@@ -39,6 +39,9 @@ sparkle_private_key*
 *.pkg
 dist/
 build/
+node_modules/
+.docusaurus/
+website/static/appcast.xml
 
 # Logs and LaunchAgent runtime output
 *.log

@@ -106,11 +106,13 @@ git push origin v1.0.12
 
 The GitHub Actions release workflow will:
 
+- install the Docusaurus website dependencies;
 - run tests;
 - build and zip `WorkScreenTimeApp.app`;
 - create or update the matching GitHub Release;
 - sign the zip with the Sparkle private key secret;
-- deploy a friend-facing download page and `appcast.xml` to this repo's GitHub Pages project site.
+- build the Docusaurus download page with the release download URL;
+- deploy the download page and `appcast.xml` to this repo's GitHub Pages project site.
 
 GitHub Pages serves the download page and appcast at:
 
@@ -126,6 +128,18 @@ Set the Sparkle repository secret before pushing a release tag:
 ```sh
 scripts/set_github_sparkle_secret.sh
 ```
+
+### Download Site
+
+The friend-facing download page is a small Docusaurus site in `website/`.
+
+```sh
+cd website
+npm install
+npm run start
+```
+
+The release workflow copies the generated Sparkle appcast into `website/static/appcast.xml` before running `npm run build`. That generated XML is ignored locally.
 
 ## Start On Login
 
