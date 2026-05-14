@@ -5,7 +5,7 @@ A local macOS menu bar utility that nudges you out of work during configured dow
 ## What It Does
 
 - Runs as a SwiftUI `MenuBarExtra` menu bar app.
-- Starts on login with a per-user LaunchAgent.
+- Starts on login with the app's built-in Launch at Login menu toggle.
 - Uses Apple Screen Time-style weekday rows with enabled toggle, start time, and end time.
 - Supports overnight windows.
 - Defaults to:
@@ -33,7 +33,7 @@ The build script runs the Swift Package Manager release build, embeds Sparkle, w
 Useful release build options:
 
 ```sh
-scripts/build_app.sh --version 1.0.12 --build 1000012 --zip .build/WorkScreenTimeApp-1.0.12.zip
+scripts/build_app.sh --version 1.0.17 --build 1000017 --zip .build/WorkScreenTimeApp-1.0.17.zip
 scripts/build_app.sh --no-zip
 ```
 
@@ -100,8 +100,8 @@ That script exports the private key from the local Keychain only long enough to 
 Releases are tag-driven. Push a semantic version tag:
 
 ```sh
-git tag v1.0.12
-git push origin v1.0.12
+git tag v1.0.17
+git push origin v1.0.17
 ```
 
 The GitHub Actions release workflow will:
@@ -143,43 +143,7 @@ The release workflow copies the generated Sparkle appcast into `website/static/a
 
 ## Start On Login
 
-After building:
-
-```sh
-scripts/install_launch_agent.sh
-```
-
-The installer writes a per-user LaunchAgent to:
-
-```text
-~/Library/LaunchAgents/app.workscreentime.WorkScreenTimeApp.plist
-```
-
-That plist points at the resolved absolute executable path inside the app bundle. For this checkout, it ends with:
-
-```text
-.build/WorkScreenTimeApp.app/Contents/MacOS/WorkScreenTimeApp
-```
-
-If you move, delete, or rebuild the app bundle at a different path, run `scripts/install_launch_agent.sh` again so launchd has the current executable path. You can also pass an explicit app bundle path:
-
-```sh
-scripts/install_launch_agent.sh /path/to/WorkScreenTimeApp.app
-```
-
-To remove startup:
-
-```sh
-scripts/uninstall_launch_agent.sh
-```
-
-Useful LaunchAgent checks:
-
-```sh
-plutil -lint ~/Library/LaunchAgents/app.workscreentime.WorkScreenTimeApp.plist
-launchctl print gui/$(id -u)/app.workscreentime.WorkScreenTimeApp
-tail -n 100 ~/Library/Logs/app.workscreentime.WorkScreenTimeApp.err.log
-```
+Use the menu bar item and choose **Enable Launch at Login**. The app uses macOS `SMAppService.mainApp`, so there is no separate LaunchAgent to install or keep in sync.
 
 ## Local Files
 
@@ -250,5 +214,4 @@ Activity detection and enforcement follow a three-state machine. The tick interv
                                                         └──────────────────────────────►NORMAL
 ```
 
-**Resume Now** sets a separate 30-second grace (`resumeGraceUntil`) that suppresses the state machine
-regardless of phase, then lets it run normally once expired.
+**Resume Now** clears pause, snooze, or current-window dismissal state. If downtime is active and you are still working, the normal grace and monitoring flow starts again.

@@ -51,6 +51,8 @@ xml_escape() {
 require_tool swift
 require_tool plutil
 require_tool ditto
+require_tool install_name_tool
+require_tool otool
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -126,6 +128,9 @@ if [[ ! -x "$BUILT_EXECUTABLE" ]]; then
   exit 1
 fi
 install -m 755 "$BUILT_EXECUTABLE" "$APP_EXECUTABLE"
+if ! otool -l "$APP_EXECUTABLE" | grep -q "@loader_path/../Frameworks"; then
+  install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP_EXECUTABLE"
+fi
 
 SPARKLE_FRAMEWORK_SRC="$(find "$ROOT_DIR/.build/artifacts" -path "*/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" -type d | head -n 1)"
 if [[ -z "$SPARKLE_FRAMEWORK_SRC" ]]; then

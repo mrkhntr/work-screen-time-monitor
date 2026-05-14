@@ -41,18 +41,20 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button("Send Test Notification") {
-                model.sendTestNotification()
-            }
-
             CheckForUpdatesView(updater: updater)
-
-            Button("Open Config Folder") {
-                model.openConfigFolder()
-            }
 
             Button(model.launchAtLogin ? "Disable Launch at Login" : "Enable Launch at Login") {
                 model.toggleLaunchAtLogin()
+            }
+
+            Menu("Advanced") {
+                Button("Send Test Notification") {
+                    model.sendTestNotification()
+                }
+
+                Button("Open Config Folder") {
+                    model.openConfigFolder()
+                }
             }
 
             Button("Quit") {

@@ -52,7 +52,7 @@ final class AppModel: ObservableObject {
     func start() {
         guard mainTimer == nil else { tick(); return }
         notificationManager.requestAuthorization()
-        notificationManager.scheduleWarnings(config: config, engine: engine)
+        notificationManager.scheduleWarnings(config: config)
         tick()
         scheduleNextTick()
     }
@@ -152,7 +152,7 @@ final class AppModel: ObservableObject {
     func saveConfig(_ newConfig: AppConfig) {
         config = newConfig
         try? configStore.save(newConfig)
-        notificationManager.scheduleWarnings(config: newConfig, engine: engine)
+        notificationManager.scheduleWarnings(config: newConfig)
         refreshStatus()
         tick()
     }
