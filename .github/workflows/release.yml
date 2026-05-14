@@ -92,7 +92,15 @@ jobs:
           fi
 
           DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.version.outputs.zip_name }}"
-          RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+          
+          # Generate clean HTML release notes for Sparkle
+          mkdir -p website/static/release-notes
+          NOTES_FILENAME="release-notes-${{ steps.version.outputs.version }}.html"
+          scripts/generate_sparkle_notes.sh "${{ steps.version.outputs.version }}" "$GITHUB_REF_NAME" "website/static/release-notes/$NOTES_FILENAME"
+          
+          # Pass the hosted HTML URL to Sparkle appcast
+          RELEASE_NOTES_URL="https://mrkhntr.com/work-screen-time-monitor/release-notes/$NOTES_FILENAME"
+          
           scripts/create_appcast.sh \
             --version "${{ steps.version.outputs.version }}" \
             --build "${{ steps.version.outputs.build }}" \
