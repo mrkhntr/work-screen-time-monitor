@@ -16,6 +16,27 @@ A local macOS menu bar utility that nudges you out of work during configured dow
 - Snoozes for 15 minutes and notifies you of the snoozed-until time.
 - Tracks snoozes in local JSON and escalates after repeated snoozes.
 
+## Releasing a New Version
+
+The release process is fully automated with GitHub Actions. You **do not** need to update the `VERSION` file manually. 
+
+To release a new version, simply tag the `main` branch with the new version number and push the tag to GitHub:
+
+```sh
+git tag v1.0.24
+git push origin v1.0.24
+```
+
+The GitHub Actions pipeline will:
+1. Extract the version number directly from the tag (`1.0.24`).
+2. Build the `.dmg` package using `create-dmg`.
+3. Auto-generate release notes dynamically by reading the git commit messages since the *last* tag.
+4. Upload the built DMG to a new GitHub Release.
+5. Generate a new `appcast.xml` and HTML release notes for Sparkle Auto-Updates.
+6. Deploy the Docusaurus landing page and Sparkle appcast via GitHub Pages.
+
+*Note: The `VERSION` file exists only as a fallback for local un-versioned development builds.*
+
 ## Build
 
 ```sh
@@ -28,12 +49,12 @@ The app bundle is created at:
 .build/WorkScreenTimeApp.app
 ```
 
-The build script runs the Swift Package Manager release build, embeds Sparkle, writes the generated app plist, ad-hoc signs the local app bundle, and exports a zip unless `--no-zip` is passed.
+The build script runs the Swift Package Manager release build, embeds Sparkle, writes the generated app plist, ad-hoc signs the local app bundle, and exports a DMG.
 
 Useful release build options:
 
 ```sh
-scripts/build_app.sh --version 1.0.17 --build 1000017 --zip .build/WorkScreenTimeApp-1.0.17.zip
+scripts/build_app.sh --version 1.0.17 --build 1000017 --dmg .build/WorkScreenTimeApp-1.0.17.dmg
 scripts/build_app.sh --no-zip
 ```
 
