@@ -28,6 +28,8 @@ history.json
 *.local.plist
 .env
 .env.*
+sparkle_private_key*
+*.sparklekey
 
 # Build products and release artifacts
 *.app/

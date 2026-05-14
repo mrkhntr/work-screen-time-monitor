@@ -11,12 +11,17 @@ let package = Package(
         .executable(name: "WorkScreenTimeApp", targets: ["WorkScreenTimeApp"]),
         .library(name: "WorkScreenTimeCore", targets: ["WorkScreenTimeCore"])
     ],
-    dependencies: [],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1")
+    ],
     targets: [
         .target(name: "WorkScreenTimeCore"),
         .executableTarget(
             name: "WorkScreenTimeApp",
-            dependencies: ["WorkScreenTimeCore"],
+            dependencies: [
+                "WorkScreenTimeCore",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
             linkerSettings: [
                 .linkedFramework("ServiceManagement")
             ]

@@ -1,0 +1,105 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Derive version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            echo "Tag must look like v1.0.12" >&2
+            exit 1
+          fi
+          IFS=. read -r MAJOR MINOR PATCH <<< "$VERSION"
+          BUILD=$(( MAJOR * 1000000 + MINOR * 1000 + PATCH ))
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "zip_name=WorkScreenTimeApp-$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Test
+        run: swift test
+
+      - name: Build app zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_PATH="$RUNNER_TEMP/${{ steps.version.outputs.zip_name }}"
+          scripts/build_app.sh \
+            --version "${{ steps.version.outputs.version }}" \
+            --build "${{ steps.version.outputs.build }}" \
+            --zip "$ZIP_PATH"
+          echo "ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ASSET_LABEL="${ZIP_PATH}#${{ steps.version.outputs.zip_name }}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ASSET_LABEL" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$ASSET_LABEL" \
+              --title "Work Screen Time ${{ steps.version.outputs.version }}" \
+              --generate-notes
+          fi
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SPARKLE_PRIVATE_KEY:-}" ]]; then
+            echo "Missing GitHub Actions secret SPARKLE_PRIVATE_KEY" >&2
+            exit 1
+          fi
+
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${{ steps.version.outputs.zip_name }}"
+          RELEASE_NOTES_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${GITHUB_REF_NAME}"
+          scripts/create_appcast.sh \
+            --version "${{ steps.version.outputs.version }}" \
+            --build "${{ steps.version.outputs.build }}" \
+            --zip "$ZIP_PATH" \
+            --download-url "$DOWNLOAD_URL" \
+            --release-notes-url "$RELEASE_NOTES_URL" \
+            --output "$RUNNER_TEMP/appcast.xml" \
+            --sign-update ".build/artifacts/sparkle/Sparkle/bin/sign_update"
+
+      - name: Publish appcast to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/appcast.xml" "$RUNNER_TEMP/appcast-to-publish.xml"
+          git fetch origin main
+          git checkout main
+          mkdir -p releases/work-screen-time
+          cp "$RUNNER_TEMP/appcast-to-publish.xml" releases/work-screen-time/appcast.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add releases/work-screen-time/appcast.xml
+          if git diff --cached --quiet; then
+            echo "Appcast unchanged."
+          else
+            git commit -m "Update appcast for $GITHUB_REF_NAME"
+            git push origin main
+          fi

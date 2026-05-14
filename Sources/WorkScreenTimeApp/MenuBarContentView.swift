@@ -1,7 +1,9 @@
+import Sparkle
 import SwiftUI
 
 struct MenuBarContentView: View {
     @ObservedObject var model: AppModel
+    let updater: SPUUpdater
 
     var body: some View {
         Group {
@@ -43,6 +45,8 @@ struct MenuBarContentView: View {
                 model.sendTestNotification()
             }
 
+            CheckForUpdatesView(updater: updater)
+
             Button("Open Config Folder") {
                 model.openConfigFolder()
             }
@@ -55,6 +59,21 @@ struct MenuBarContentView: View {
                 model.quit()
             }
             .keyboardShortcut("q")
+        }
+    }
+}
+
+private struct CheckForUpdatesView: View {
+    let updater: SPUUpdater
+    @State private var canCheckForUpdates = false
+
+    var body: some View {
+        Button("Check for Updates...") {
+            updater.checkForUpdates()
+        }
+        .disabled(!canCheckForUpdates)
+        .onReceive(updater.publisher(for: \.canCheckForUpdates)) { canCheckForUpdates in
+            self.canCheckForUpdates = canCheckForUpdates
         }
     }
 }

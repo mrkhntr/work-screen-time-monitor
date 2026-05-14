@@ -28,7 +28,14 @@ The app bundle is created at:
 .build/WorkScreenTimeApp.app
 ```
 
-The build script first tries the Swift Package Manager release build. If that fails, it falls back to a direct `swiftc` build and copies the core dynamic library into the app bundle's `Contents/Frameworks` directory. The generated app plist is validated before the script exits.
+The build script runs the Swift Package Manager release build, embeds Sparkle, writes the generated app plist, ad-hoc signs the local app bundle, and exports a zip unless `--no-zip` is passed.
+
+Useful release build options:
+
+```sh
+scripts/build_app.sh --version 1.0.12 --build 1000012 --zip .build/WorkScreenTimeApp-1.0.12.zip
+scripts/build_app.sh --no-zip
+```
 
 This workspace also includes `Package.swift`, so on a healthy Swift toolchain you can run:
 
@@ -64,6 +71,54 @@ open .build/WorkScreenTimeApp.app
 ```
 
 The first launch should request notification permission. If you miss it, enable notifications in System Settings.
+
+For unsigned friend/team builds, macOS may require right-clicking the app and choosing **Open** the first time.
+
+## Auto-Updates
+
+The app uses Sparkle 2 for update checks. Installed copies do not need git, source files, Xcode, or Swift.
+
+- Feed URL: `https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml`
+- Check interval: daily
+- Install behavior: Sparkle asks before installing an available update.
+- Update verification: Sparkle EdDSA signatures.
+- Apple Developer ID signing: not required for v1, but first-run Gatekeeper approval may be required.
+
+The committed public Sparkle key is embedded into the generated app plist. The private key must stay out of git and be available to GitHub Actions as `SPARKLE_PRIVATE_KEY`.
+
+To create or reuse the local Sparkle key and set the GitHub secret:
+
+```sh
+swift package resolve
+scripts/set_github_sparkle_secret.sh
+```
+
+That script exports the private key from the local Keychain only long enough to pass it to `gh secret set`.
+
+### Publishing A Release
+
+Releases are tag-driven. Push a semantic version tag:
+
+```sh
+git tag v1.0.12
+git push origin v1.0.12
+```
+
+The GitHub Actions release workflow will:
+
+- run tests;
+- build and zip `WorkScreenTimeApp.app`;
+- create or update the matching GitHub Release;
+- sign the zip with the Sparkle private key secret;
+- update `releases/work-screen-time/appcast.xml` on `main`.
+
+Your `mrkhntr.com` hosting must serve that appcast file at:
+
+```text
+https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml
+```
+
+The workflow commits the appcast into this repo under `releases/work-screen-time/`. GitHub Pages is configured to serve this repo's `main` branch from the repo root with `CNAME` set to `workscreen.mrkhntr.com`.
 
 ## Start On Login
 
@@ -125,8 +180,8 @@ The SwiftUI Settings window edits the same JSON config. You can also edit the JS
 
 - 0 snoozes: gentle reminder and quote.
 - 1 snooze: firmer reminder.
-- 2 snoozes: dismissal requires holding the unlock button.
-- 3+ snoozes: dismissal requires holding the unlock button, typing `I am done for today`, and writing a short reason.
+- 2 snoozes: snooze/dismiss requires holding the unlock button.
+- 3+ snoozes: snooze/dismiss requires holding the unlock button, typing `I am done for today`, and writing a short reason.
 
 Snooze remains available at every level.
 

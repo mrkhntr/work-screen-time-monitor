@@ -11,6 +11,21 @@ FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
 DIRECT_DIR="$ROOT_DIR/.build/direct"
 APP_EXECUTABLE="$MACOS_DIR/$APP_NAME"
 INFO_PLIST="$CONTENTS_DIR/Info.plist"
+ZIP_PATH="${ZIP_PATH:-$HOME/Downloads/$APP_NAME.zip}"
+CREATE_ZIP=1
+APP_VERSION="${APP_VERSION:-}"
+APP_BUILD="${APP_BUILD:-}"
+
+usage() {
+  cat >&2 <<USAGE
+Usage: $0 [--version VERSION] [--build BUILD] [--zip PATH] [--no-zip]
+
+Environment overrides:
+  APP_VERSION  Version string for CFBundleShortVersionString
+  APP_BUILD    Build number for CFBundleVersion
+  ZIP_PATH     Output zip path
+USAGE
+}
 
 require_tool() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -34,17 +49,57 @@ xml_escape() {
 }
 
 require_tool swift
-require_tool swiftc
 require_tool plutil
+require_tool ditto
 
-# Auto-increment build number
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --version)
+      APP_VERSION="${2:-}"
+      shift 2
+      ;;
+    --build)
+      APP_BUILD="${2:-}"
+      shift 2
+      ;;
+    --zip)
+      ZIP_PATH="${2:-}"
+      shift 2
+      ;;
+    --no-zip)
+      CREATE_ZIP=0
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      usage
+      exit 64
+      ;;
+  esac
+done
+
 VERSION_FILE="$ROOT_DIR/VERSION"
 if [[ ! -f "$VERSION_FILE" ]]; then
-  echo "1" > "$VERSION_FILE"
+  echo "1.0.0" > "$VERSION_FILE"
 fi
-BUILD=$(( $(tr -d '[:space:]' < "$VERSION_FILE") + 1 ))
-echo "$BUILD" > "$VERSION_FILE"
-VERSION="1.0.$BUILD"
+
+VERSION="${APP_VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}"
+if [[ -z "$VERSION" ]]; then
+  VERSION="1.0.0"
+fi
+
+if [[ -n "$APP_BUILD" ]]; then
+  BUILD="$APP_BUILD"
+else
+  BUILD="${VERSION##*.}"
+  if [[ ! "$BUILD" =~ ^[0-9]+$ ]]; then
+    BUILD="1"
+  fi
+fi
+
 echo "Version: $VERSION (build $BUILD)"
 
 if ! swift --version >/dev/null; then
@@ -63,48 +118,27 @@ mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$CONTENTS_DIR/Resources"
 
 cd "$ROOT_DIR"
 
-if swift build -c release; then
-  BUILT_EXECUTABLE="$ROOT_DIR/.build/release/$APP_NAME"
-  if [[ ! -x "$BUILT_EXECUTABLE" ]]; then
-    echo "SwiftPM reported success, but no executable was found at $BUILT_EXECUTABLE" >&2
-    exit 1
-  fi
-  install -m 755 "$BUILT_EXECUTABLE" "$APP_EXECUTABLE"
-else
-  echo "SwiftPM build failed; attempting direct swiftc build..." >&2
-  mkdir -p "$DIRECT_DIR"
+swift build -c release
 
-  CORE_SOURCES=("$ROOT_DIR"/Sources/WorkScreenTimeCore/*.swift)
-  APP_SOURCES=("$ROOT_DIR"/Sources/WorkScreenTimeApp/*.swift)
-  if [[ ! -e "${CORE_SOURCES[0]}" || ! -e "${APP_SOURCES[0]}" ]]; then
-    echo "Source files are missing from Sources/WorkScreenTimeCore or Sources/WorkScreenTimeApp." >&2
-    exit 1
-  fi
-
-  swiftc -O \
-    -emit-library \
-    -emit-module \
-    -module-name WorkScreenTimeCore \
-    -Xlinker -install_name \
-    -Xlinker "@rpath/libWorkScreenTimeCore.dylib" \
-    "${CORE_SOURCES[@]}" \
-    -o "$DIRECT_DIR/libWorkScreenTimeCore.dylib"
-
-  swiftc -O \
-    -I "$DIRECT_DIR" \
-    -L "$DIRECT_DIR" \
-    -lWorkScreenTimeCore \
-    -Xlinker -rpath \
-    -Xlinker "@executable_path/../Frameworks" \
-    "${APP_SOURCES[@]}" \
-    -o "$APP_EXECUTABLE"
-
-  cp "$DIRECT_DIR/libWorkScreenTimeCore.dylib" "$FRAMEWORKS_DIR/"
+BUILT_EXECUTABLE="$ROOT_DIR/.build/release/$APP_NAME"
+if [[ ! -x "$BUILT_EXECUTABLE" ]]; then
+  echo "SwiftPM reported success, but no executable was found at $BUILT_EXECUTABLE" >&2
+  exit 1
 fi
+install -m 755 "$BUILT_EXECUTABLE" "$APP_EXECUTABLE"
+
+SPARKLE_FRAMEWORK_SRC="$(find "$ROOT_DIR/.build/artifacts" -path "*/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework" -type d | head -n 1)"
+if [[ -z "$SPARKLE_FRAMEWORK_SRC" ]]; then
+  echo "Sparkle.framework was not found. Run 'swift package resolve' and try again." >&2
+  exit 1
+fi
+ditto "$SPARKLE_FRAMEWORK_SRC" "$FRAMEWORKS_DIR/Sparkle.framework"
 
 APP_NAME_XML="$(xml_escape "$APP_NAME")"
 BUNDLE_NAME_XML="$(xml_escape "Work Screen Time")"
 BUNDLE_ID_XML="$(xml_escape "app.workscreentime.WorkScreenTimeApp")"
+SPARKLE_FEED_URL_XML="$(xml_escape "https://workscreen.mrkhntr.com/releases/work-screen-time/appcast.xml")"
+SPARKLE_PUBLIC_KEY_XML="$(xml_escape "JP0FniXbX8CXCxFyv/Q8yGmWaRM9svMSnMXH5NhSuOo=")"
 
 cat > "$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -133,6 +167,20 @@ cat > "$INFO_PLIST" <<PLIST
   <true/>
   <key>NSHumanReadableCopyright</key>
   <string>Local utility</string>
+  <key>SUAllowsAutomaticUpdates</key>
+  <true/>
+  <key>SUAutomaticallyUpdate</key>
+  <false/>
+  <key>SUEnableAutomaticChecks</key>
+  <true/>
+  <key>SUFeedURL</key>
+  <string>$SPARKLE_FEED_URL_XML</string>
+  <key>SUPublicEDKey</key>
+  <string>$SPARKLE_PUBLIC_KEY_XML</string>
+  <key>SUScheduledCheckInterval</key>
+  <integer>86400</integer>
+  <key>SUVerifyUpdateBeforeExtraction</key>
+  <true/>
 </dict>
 </plist>
 PLIST
@@ -148,7 +196,9 @@ codesign --force --deep --sign - "$APP_DIR"
 
 echo "Built $APP_DIR"
 
-ZIP_PATH="$HOME/Downloads/$APP_NAME.zip"
-rm -f "$ZIP_PATH"
-(cd "$(dirname "$APP_DIR")" && zip -r "$ZIP_PATH" "$(basename "$APP_DIR")")
-echo "Exported to $ZIP_PATH"
+if [[ "$CREATE_ZIP" -eq 1 ]]; then
+  mkdir -p "$(dirname "$ZIP_PATH")"
+  rm -f "$ZIP_PATH"
+  ditto -c -k --keepParent "$APP_DIR" "$ZIP_PATH"
+  echo "Exported to $ZIP_PATH"
+fi

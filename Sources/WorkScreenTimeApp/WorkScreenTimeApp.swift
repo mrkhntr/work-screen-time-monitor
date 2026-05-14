@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 import WorkScreenTimeCore
 
@@ -6,14 +7,20 @@ import WorkScreenTimeCore
 struct WorkScreenTimeApp: App {
     @NSApplicationDelegateAdaptor(AppLifecycleDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
+    private let updaterController: SPUStandardUpdaterController
 
     init() {
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: true,
+            updaterDelegate: nil,
+            userDriverDelegate: nil
+        )
         NSApplication.shared.setActivationPolicy(.accessory)
     }
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContentView(model: model)
+            MenuBarContentView(model: model, updater: updaterController.updater)
         } label: {
             Label(model.menuTitle, systemImage: model.menuSystemImage)
         }
@@ -32,6 +39,6 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        .terminateCancel
+        .terminateNow
     }
 }
