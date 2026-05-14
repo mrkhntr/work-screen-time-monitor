@@ -7,19 +7,10 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
-
-concurrency:
-  group: github-pages
-  cancel-in-progress: false
 
 jobs:
   release:
     runs-on: macos-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Check out repository
@@ -108,14 +99,24 @@ jobs:
             --download-url "$DOWNLOAD_URL" \
             --release-notes-url "$RELEASE_NOTES_URL"
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ runner.temp }}/pages
-
-      - name: Deploy appcast to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish GitHub Pages files to main
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "$RUNNER_TEMP/pages/index.html" "$RUNNER_TEMP/index.html"
+          cp "$RUNNER_TEMP/pages/appcast.xml" "$RUNNER_TEMP/appcast.xml"
+          cp "$RUNNER_TEMP/pages/.nojekyll" "$RUNNER_TEMP/.nojekyll"
+          git fetch origin main
+          git checkout main
+          cp "$RUNNER_TEMP/index.html" index.html
+          cp "$RUNNER_TEMP/appcast.xml" appcast.xml
+          cp "$RUNNER_TEMP/.nojekyll" .nojekyll
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html appcast.xml .nojekyll
+          if git diff --cached --quiet; then
+            echo "GitHub Pages files unchanged."
+          else
+            git commit -m "Update download page for $GITHUB_REF_NAME"
+            git push origin main
+          fi
