@@ -39,6 +39,15 @@ final class AppLifecycleDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        .terminateNow
+        if AppModel.shared?.isQuitting == true {
+            return .terminateNow
+        }
+        
+        // Prevent Cmd+Q from bypassing the full-screen lockdown
+        if AppModel.shared?.isPromptShowing == true {
+            return .terminateCancel
+        }
+        
+        return .terminateNow
     }
 }

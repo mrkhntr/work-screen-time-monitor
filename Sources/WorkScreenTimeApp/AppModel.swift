@@ -16,6 +16,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var showsResumeAction = false
     @Published private(set) var resumeCountdown: Int? = nil
     @Published private(set) var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
+    
+    var isQuitting = false
 
     private let paths: AppPaths
     private let configStore: ConfigStore
@@ -39,6 +41,11 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: - Public computed
+
+    var isPromptShowing: Bool {
+        if case .prompting = appState { return true }
+        return false
+    }
 
     var menuTitle: String {
         todaySnoozeCount > 0 ? "Balance \(todaySnoozeCount)" : "Balance"
@@ -190,6 +197,7 @@ final class AppModel: ObservableObject {
     }
 
     func quit() {
+        isQuitting = true
         NSApplication.shared.terminate(nil)
     }
 

@@ -60,7 +60,6 @@ struct MenuBarContentView: View {
             Button("Quit") {
                 model.quit()
             }
-            .keyboardShortcut("q")
         }
     }
 }
