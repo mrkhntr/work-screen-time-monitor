@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager / Xcode
+.build/
+.swiftpm/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcuserstate
+*.xccheckout
+*.xcscmblueprint
+
+# Local editor and assistant state
+.vscode/
+.idea/
+.claude/
+.codex/
+*.swp
+*.swo
+
+# Local runtime data
+config.json
+history.json
+*.local.json
+*.local.plist
+.env
+.env.*
+
+# Build products and release artifacts
+*.app/
+*.dSYM/
+*.zip
+*.dmg
+*.pkg
+dist/
+build/
+
+# Logs and LaunchAgent runtime output
+*.log
+*.out
+*.err
