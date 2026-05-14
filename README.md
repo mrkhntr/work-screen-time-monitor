@@ -110,7 +110,7 @@ The GitHub Actions release workflow will:
 - build and zip `WorkScreenTimeApp.app`;
 - create or update the matching GitHub Release;
 - sign the zip with the Sparkle private key secret;
-- commit a friend-facing download page and `appcast.xml` to `main` for this repo's GitHub Pages project site.
+- deploy a friend-facing download page and `appcast.xml` to this repo's GitHub Pages project site.
 
 GitHub Pages serves the download page and appcast at:
 
@@ -119,7 +119,7 @@ https://mrkhntr.com/work-screen-time-monitor/
 https://mrkhntr.com/work-screen-time-monitor/appcast.xml
 ```
 
-The workflow uses GitHub Pages project-site routing for this repo, matching the pattern used by `mrk-app`. No app repo `CNAME` is needed. The generated `index.html` and `appcast.xml` are committed by the release workflow.
+The workflow uses GitHub Pages project-site routing for this repo, matching the pattern used by `mrk-app`. No app repo `CNAME` is needed. Pages should be configured to deploy from GitHub Actions.
 
 Set the Sparkle repository secret before pushing a release tag:
 
