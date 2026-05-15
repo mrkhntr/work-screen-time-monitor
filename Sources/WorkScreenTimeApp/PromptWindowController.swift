@@ -78,6 +78,7 @@ final class PromptWindowController {
 
     private func rebuildWindowsForCurrentScreens() {
         windows.forEach { $0.close() }
+        windows.removeAll()
         windows = NSScreen.screens.map(makeWindow(for:))
     }
 
