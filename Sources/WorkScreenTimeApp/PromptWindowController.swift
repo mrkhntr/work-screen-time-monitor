@@ -11,6 +11,7 @@ final class PromptWindowController {
     private let escalation: EscalationState
     private let onSnooze: (PromptWindowController) -> Void
     private let onDismiss: (PromptWindowController, String?) -> Void
+    private let formState = PromptFormState()
     private var windows: [NSWindow] = []
     private var screenChangeObserver: NSObjectProtocol?
     private var screenRebuildTask: Task<Void, Never>?
@@ -109,7 +110,8 @@ final class PromptWindowController {
             config: config,
             escalation: escalation,
             onSnooze: { [weak self] in self?.finishSnooze() },
-            onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) }
+            onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) },
+            formState: formState
         )
 
         let window = PromptWindow(

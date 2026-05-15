@@ -9,59 +9,34 @@ struct FullScreenPromptView: View {
     let escalation: EscalationState
     let onSnooze: () -> Void
     let onDismiss: (String?) -> Void
-
-    @State private var holdUnlocked = false
-    @State private var phrase = ""
-    @State private var reason = ""
-    @State private var selectedAction: PromptAction = .snooze
-    @State private var attemptedAction = false
-
-    private var canDismiss: Bool {
-        let holdOK = !escalation.requiresHold || holdUnlocked
-        let phraseOK = !escalation.requiresPhrase || phrase == config.escalation.confirmationPhrase
-        let reasonOK = !escalation.requiresReason || reasonText.count >= minimumReasonLength
-        return holdOK && phraseOK && reasonOK
-    }
+    @ObservedObject var formState: PromptFormState
 
     private var reasonText: String {
-        reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        formState.reason.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var validationMessages: [String] {
-        var messages: [String] = []
-
-        if escalation.requiresHold && !holdUnlocked {
-            messages.append("Hold the unlock control for 2 seconds.")
-        }
-
-        if escalation.requiresPhrase && phrase != config.escalation.confirmationPhrase {
-            messages.append("Type the confirmation phrase exactly.")
-        }
-
-        if escalation.requiresReason && reasonText.count < minimumReasonLength {
-            messages.append("Write a reason with at least \(minimumReasonLength) characters.")
-        }
-
-        return messages
+    private var requirements: [Requirement] {
+        [
+            escalation.requiresHold ? Requirement(
+                id: "hold", label: "Hold for 2 seconds",
+                message: "Hold the unlock control for 2 seconds.",
+                isComplete: formState.holdUnlocked
+            ) : nil,
+            escalation.requiresPhrase ? Requirement(
+                id: "phrase", label: "Type the phrase exactly",
+                message: "Type the confirmation phrase exactly.",
+                isComplete: formState.phrase == config.escalation.confirmationPhrase
+            ) : nil,
+            escalation.requiresReason ? Requirement(
+                id: "reason", label: "Write a real reason",
+                message: "Write a reason with at least \(minimumReasonLength) characters.",
+                isComplete: reasonText.count >= minimumReasonLength
+            ) : nil,
+        ].compactMap { $0 }
     }
 
-    private var requirementRows: [RequirementRow] {
-        var rows: [RequirementRow] = []
-
-        if escalation.requiresHold {
-            rows.append(RequirementRow(label: "Hold for 2 seconds", isComplete: holdUnlocked))
-        }
-
-        if escalation.requiresPhrase {
-            rows.append(RequirementRow(label: "Type the phrase exactly", isComplete: phrase == config.escalation.confirmationPhrase))
-        }
-
-        if escalation.requiresReason {
-            rows.append(RequirementRow(label: "Write a real reason", isComplete: reasonText.count >= minimumReasonLength))
-        }
-
-        return rows
-    }
+    private var canDismiss: Bool { requirements.allSatisfy(\.isComplete) }
+    private var validationMessages: [String] { requirements.filter { !$0.isComplete }.map(\.message) }
 
     var body: some View {
         ZStack {
@@ -90,22 +65,22 @@ struct FullScreenPromptView: View {
                 .frame(width: 240, height: 240)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                if !requirementRows.isEmpty {
-                    RequirementChecklist(rows: requirementRows)
+                if !requirements.isEmpty {
+                    RequirementChecklist(requirements: requirements)
                 }
 
                 if escalation.requiresHold {
-                    HoldToUnlockButton(isUnlocked: $holdUnlocked)
+                    HoldToUnlockButton(isUnlocked: $formState.holdUnlocked)
                 }
 
                 if escalation.requiresPhrase {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Type: \(config.escalation.confirmationPhrase)")
                             .foregroundStyle(.white.opacity(0.72))
-                        TextField(config.escalation.confirmationPhrase, text: $phrase)
+                        TextField(config.escalation.confirmationPhrase, text: $formState.phrase)
                             .textFieldStyle(.roundedBorder)
-                            .onChange(of: phrase) { _ in
-                                attemptedAction = false
+                            .onChange(of: formState.phrase) { _ in
+                                formState.attemptedAction = false
                             }
                     }
                     .frame(width: 420)
@@ -115,17 +90,17 @@ struct FullScreenPromptView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Why are you continuing past this boundary?")
                             .foregroundStyle(.white.opacity(0.72))
-                        TextField("One real sentence, at least \(minimumReasonLength) characters", text: $reason)
+                        TextField("One real sentence, at least \(minimumReasonLength) characters", text: $formState.reason)
                             .textFieldStyle(.roundedBorder)
-                            .onChange(of: reason) { _ in
-                                attemptedAction = false
+                            .onChange(of: formState.reason) { _ in
+                                formState.attemptedAction = false
                             }
                     }
                     .frame(width: 420)
                 }
 
                 ZStack {
-                    Button(selectedAction.title(snoozeMinutes: config.snoozeMinutes)) {
+                    Button(formState.selectedAction.title(snoozeMinutes: config.snoozeMinutes)) {
                         performSelectedAction()
                     }
                     .keyboardShortcut(.defaultAction)
@@ -137,9 +112,9 @@ struct FullScreenPromptView: View {
                         Spacer()
                             .frame(width: 206)
                         Menu {
-                            Button(selectedAction.alternate.title(snoozeMinutes: config.snoozeMinutes)) {
-                                selectedAction = selectedAction.alternate
-                                attemptedAction = false
+                            Button(formState.selectedAction.alternate.title(snoozeMinutes: config.snoozeMinutes)) {
+                                formState.selectedAction = formState.selectedAction.alternate
+                                formState.attemptedAction = false
                             }
                         } label: {
                             Text("Switch")
@@ -152,7 +127,7 @@ struct FullScreenPromptView: View {
                 .frame(width: 260)
                 .padding(.top, 4)
 
-                if !validationMessages.isEmpty && (attemptedAction || escalation.requiresHold) {
+                if !validationMessages.isEmpty && (formState.attemptedAction || escalation.requiresHold) {
                     VStack(spacing: 4) {
                         ForEach(validationMessages, id: \.self) { message in
                             Text(message)
@@ -160,7 +135,7 @@ struct FullScreenPromptView: View {
                     }
                     .font(.callout)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(attemptedAction ? Color.orange : Color.white.opacity(0.7))
+                    .foregroundStyle(formState.attemptedAction ? Color.orange : Color.white.opacity(0.7))
                 }
             }
             .padding(40)
@@ -169,31 +144,24 @@ struct FullScreenPromptView: View {
     }
 
     private func performSelectedAction() {
-        switch selectedAction {
-        case .snooze:
-            attemptedAction = true
-            guard canDismiss else {
-                return
-            }
-            onSnooze()
-        case .dismiss:
-            attemptedAction = true
-            guard canDismiss else {
-                return
-            }
-            onDismiss(reasonText.isEmpty ? nil : reasonText)
+        formState.attemptedAction = true
+        guard canDismiss else { return }
+        switch formState.selectedAction {
+        case .snooze: onSnooze()
+        case .dismiss: onDismiss(reasonText.isEmpty ? nil : reasonText)
         }
     }
 }
 
-private struct RequirementRow: Identifiable {
-    var id: String { label }
+private struct Requirement: Identifiable {
+    let id: String
     let label: String
+    let message: String
     let isComplete: Bool
 }
 
 private struct RequirementChecklist: View {
-    let rows: [RequirementRow]
+    let requirements: [Requirement]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -201,12 +169,12 @@ private struct RequirementChecklist: View {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.78))
 
-            ForEach(rows) { row in
+            ForEach(requirements) { req in
                 HStack(spacing: 8) {
-                    Image(systemName: row.isComplete ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(row.isComplete ? Color.green : Color.white.opacity(0.45))
-                    Text(row.label)
-                        .foregroundStyle(row.isComplete ? Color.white.opacity(0.82) : Color.white.opacity(0.64))
+                    Image(systemName: req.isComplete ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(req.isComplete ? Color.green : Color.white.opacity(0.45))
+                    Text(req.label)
+                        .foregroundStyle(req.isComplete ? Color.white.opacity(0.82) : Color.white.opacity(0.64))
                 }
                 .font(.callout)
             }
@@ -215,29 +183,6 @@ private struct RequirementChecklist: View {
         .padding(.vertical, 14)
         .background(Color.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-private enum PromptAction {
-    case snooze
-    case dismiss
-
-    var alternate: PromptAction {
-        switch self {
-        case .snooze:
-            .dismiss
-        case .dismiss:
-            .snooze
-        }
-    }
-
-    func title(snoozeMinutes: Int) -> String {
-        switch self {
-        case .snooze:
-            "Snooze now"
-        case .dismiss:
-            "Dismiss for today"
-        }
     }
 }
 
