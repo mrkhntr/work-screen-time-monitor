@@ -206,7 +206,7 @@ final class AppModel: ObservableObject {
     private func scheduleNextTick(now: Date = Date()) {
         let interval: TimeInterval
         switch appState {
-        case .grace, .monitoring, .prompting:
+        case .prompting:
             interval = 5
         case .downtimeNormal:
             interval = 10
@@ -267,20 +267,7 @@ final class AppModel: ObservableObject {
         case .idle, .downtimeNormal:
             appState = .downtimeNormal
             if isActive {
-                appState = .grace(until: now.addingTimeInterval(30))
-                notificationManager.notifyGrace()
-            }
-
-        case .grace(let until):
-            if now >= until {
-                appState = .monitoring(until: now.addingTimeInterval(60))
-            }
-
-        case .monitoring(let until):
-            if isActive {
                 showPrompt(for: window, dateKey: windowDateKey, summary: summary, now: now)
-            } else if now >= until {
-                appState = .downtimeNormal
             }
 
         case .snoozed, .paused, .prompting:
@@ -373,18 +360,6 @@ final class AppModel: ObservableObject {
             showsPauseActions = false
             showsResumeAction = true
 
-        case .grace:
-            menuSystemImage = "exclamationmark.triangle.fill"
-            statusText = "In downtime — grace period"
-            showsPauseActions = true
-            showsResumeAction = false
-
-        case .monitoring:
-            menuSystemImage = "eye.fill"
-            statusText = "In downtime — monitoring activity"
-            showsPauseActions = true
-            showsResumeAction = false
-
         case .downtimeNormal:
             menuSystemImage = "moon.fill"
             statusText = "In downtime"
@@ -425,8 +400,6 @@ final class AppModel: ObservableObject {
 private enum AppState {
     case idle
     case downtimeNormal
-    case grace(until: Date)
-    case monitoring(until: Date)
     case snoozed(until: Date)
     case paused(until: Date)
     case prompting(controller: PromptWindowController, shownAt: Date)

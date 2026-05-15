@@ -62,14 +62,6 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         center.add(UNNotificationRequest(identifier: "test-\(UUID().uuidString)", content: content, trigger: nil))
     }
 
-    func notifyGrace() {
-        let content = UNMutableNotificationContent()
-        content.title = "Activity detected during downtime"
-        content.body = "30 second grace period — enforcement begins after 1 minute of continued activity."
-        content.sound = .default
-        center.add(UNNotificationRequest(identifier: "enforcement-grace-\(UUID().uuidString)", content: content, trigger: nil))
-    }
-
     func notifySnoozed(until date: Date) {
         let formatter = DateFormatter()
         formatter.timeStyle = .short

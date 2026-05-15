@@ -226,12 +226,9 @@ Snooze remains available at every level.
 
 ## Enforcement State Machine
 
-Activity detection and enforcement follow a three-state machine. The tick interval adapts per state.
+Activity detection and enforcement follow a two-state machine. The tick interval adapts per state.
 
 ```
-                        ┌─────────────────────────────────────────────┐
-                        │                                             │
-                        ▼                                             │
               ┌─────────────────┐                                     │
               │     NORMAL      │  tick: 10s (downtime) / 60s (idle) │
               │                 │                                     │
@@ -239,33 +236,16 @@ Activity detection and enforcement follow a three-state machine. The tick interv
                        │ activity detected during downtime            │
                        │                                              │
                        ▼                                              │
-              ┌─────────────────┐                                     │
-              │      GRACE      │  tick: 5s  · duration: 30s         │
-              │                 │  notification fires once            │
-              └────────┬────────┘                                     │
-                       │ 30s elapsed                                  │
-                       │                                              │
-                       ▼                                              │
-              ┌─────────────────┐                                     │
-              │   MONITORING    │  tick: 5s  · window: 60s           │
-              │                 │  observes for any input             │
-              └────────┬────────┘                                     │
-                       │                                              │
-            ┌──────────┴──────────┐                                  │
-            │ activity seen?      │                                   │
-           YES                   NO                                   │
-            │                    └──────────────────────────────────►┘
-            ▼                                   reset to NORMAL
-     ┌─────────────┐
-     │  FULLSCREEN │  tick: 5s · user can snooze or dismiss
-     │   PROMPT    │
-     └──────┬──────┘
-            │
-   ┌────────┴──────────────────────────────────────────┐
-   │ user action                                        │ auto-expiry (tick checks each 5s)
-   │ snooze / dismiss / pause                          │ downtime ended  →  close, reset NORMAL
+     ┌─────────────┐                                                  │
+     │  FULLSCREEN │  tick: 5s · user can snooze or dismiss          │
+     │   PROMPT    │                                                  │
+     └──────┬──────┘                                                  │
+            │                                                         │
+   ┌────────┴──────────────────────────────────────────┐             │
+   │ user action                                        │ auto-expiry │
+   │ snooze / dismiss / pause                          │ downtime ended  →  reset NORMAL
    └──────────────────────────────────────►NORMAL      │ 1 hr elapsed    →  dismiss + reset NORMAL
                                                         └──────────────────────────────►NORMAL
 ```
 
-**Resume Now** clears pause, snooze, or current-window dismissal state. If downtime is active and you are still working, the normal grace and monitoring flow starts again.
+**Resume Now** clears pause, snooze, or current-window dismissal state. If downtime is active and you are still working, enforcement begins immediately.
