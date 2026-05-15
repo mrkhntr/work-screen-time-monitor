@@ -7,6 +7,7 @@ const config = {
   baseUrl: '/work-screen-time-monitor/',
   organizationName: 'mrkhntr',
   projectName: 'work-screen-time-monitor',
+  favicon: 'img/favicon.png',
   onBrokenLinks: 'throw',
   trailingSlash: false,
   markdown: {
@@ -49,6 +50,10 @@ const config = {
     ],
     navbar: {
       title: 'Work Screen Time',
+      logo: {
+        alt: 'Work Screen Time',
+        src: 'img/logo.png',
+      },
       items: [
         {
           href: 'https://github.com/mrkhntr/work-screen-time-monitor',

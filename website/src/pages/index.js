@@ -11,6 +11,7 @@ function DownloadHero() {
   return (
     <main className={styles.hero}>
       <section className={styles.copy}>
+        <img src="img/app-icon.png" alt="" className={styles.appIcon} />
         <p className={styles.kicker}>macOS menu bar app</p>
         <h1>Work Screen Time</h1>
         <p className={styles.lede}>
