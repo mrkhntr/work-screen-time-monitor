@@ -16,6 +16,7 @@ final class PromptWindowController {
     private var isRebuildingWindows = false
     private var needsAnotherRebuild = false
     private var lastScreenSignature: [ScreenSignature] = []
+    private let screenSignaturePrecision = 100.0
     private var didFinish = false
 
     init(
@@ -113,11 +114,11 @@ final class PromptWindowController {
             .map { screen in
                 let frame = screen.frame
                 return ScreenSignature(
-                    x: Int((frame.origin.x * 100).rounded()),
-                    y: Int((frame.origin.y * 100).rounded()),
-                    width: Int((frame.size.width * 100).rounded()),
-                    height: Int((frame.size.height * 100).rounded()),
-                    scale: Int((screen.backingScaleFactor * 100).rounded())
+                    x: Int((frame.origin.x * screenSignaturePrecision).rounded()),
+                    y: Int((frame.origin.y * screenSignaturePrecision).rounded()),
+                    width: Int((frame.size.width * screenSignaturePrecision).rounded()),
+                    height: Int((frame.size.height * screenSignaturePrecision).rounded()),
+                    scale: Int((screen.backingScaleFactor * screenSignaturePrecision).rounded())
                 )
             }
             .sorted()
