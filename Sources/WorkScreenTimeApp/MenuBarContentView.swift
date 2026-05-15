@@ -12,8 +12,8 @@ struct MenuBarContentView: View {
 
             Divider()
 
-            Button("Settings...") {
-                model.openSettings()
+            SettingsLink {
+                Text("Settings...")
             }
 
             Divider()

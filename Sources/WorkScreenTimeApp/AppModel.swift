@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var showsResumeAction = false
     @Published private(set) var resumeCountdown: Int? = nil
     @Published private(set) var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
+    @Published private(set) var activePrompt: ActivePrompt?
     
     var isQuitting = false
 
@@ -25,7 +26,6 @@ final class AppModel: ObservableObject {
     private let engine = ScheduleEngine()
     private let idleMonitor = IdleMonitor()
     private let notificationManager = NotificationManager()
-    private var settingsWindow: NSWindow?
     private var mainTimer: Timer?
     private var countdownTimer: Timer?
     private var appState: AppState = .idle
@@ -134,24 +134,6 @@ final class AppModel: ObservableObject {
         refreshStatus(now: now)
     }
 
-    func openSettings() {
-        if settingsWindow == nil {
-            let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
-                styleMask: [.titled, .closable, .miniaturizable, .resizable],
-                backing: .buffered,
-                defer: false
-            )
-            window.title = "Work Screen Time Settings"
-            window.contentView = NSHostingView(rootView: SettingsView(model: self))
-            window.isReleasedWhenClosed = false
-            window.center()
-            settingsWindow = window
-        }
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-    }
-
     func openConfigFolder() {
         NSWorkspace.shared.open(configDirectoryURL)
     }
@@ -227,11 +209,11 @@ final class AppModel: ObservableObject {
 
     private func tick(now: Date = Date()) {
         // Prompt auto-expiry check
-        if case .prompting(let controller, let shownAt) = appState {
+        if case .prompting(let prompt, let shownAt) = appState {
             let downtimeEnded = engine.activeWindow(at: now, config: config) == nil
             let timedOut = now.timeIntervalSince(shownAt) >= 3_600
             if downtimeEnded || timedOut {
-                autoExpirePrompt(controller: controller, now: now, downtimeEnded: downtimeEnded)
+                autoExpirePrompt(prompt: prompt, now: now, downtimeEnded: downtimeEnded)
             }
             refreshStatus(now: now)
             return
@@ -297,54 +279,52 @@ final class AppModel: ObservableObject {
         let escalation = engine.escalationState(snoozeCount: summary.snoozes, config: config, quote: quote)
         try? historyStore.recordPrompt(dateKey: dateKey, windowID: window.id, at: now)
 
-        let controller = PromptWindowController(
-            window: window,
+        let prompt = ActivePrompt(
+            downtimeWindow: window,
             dateKey: dateKey,
             config: config,
-            escalation: escalation,
-            onSnooze: { [weak self] c in self?.snooze(from: c) },
-            onDismiss: { [weak self] c, reason in self?.dismiss(from: c, reason: reason) }
+            escalation: escalation
         )
-        appState = .prompting(controller: controller, shownAt: now)
-        controller.show()
+        activePrompt = prompt
+        appState = .prompting(prompt: prompt, shownAt: now)
         refreshStatus(now: now)
     }
 
-    private func snooze(from controller: PromptWindowController) {
+    func snoozeActivePrompt() {
+        guard let prompt = activePrompt else { return }
         let now = Date()
         let until = now.addingTimeInterval(TimeInterval(config.snoozeMinutes * 60))
-        try? historyStore.recordSnooze(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, until: until, at: now)
+        try? historyStore.recordSnooze(dateKey: prompt.dateKey, windowID: prompt.downtimeWindow.id, until: until, at: now)
         notificationManager.notifySnoozed(until: until)
-        controller.closeAll()
+        activePrompt = nil
         appState = .snoozed(until: until)
         refreshStatus(now: now)
     }
 
-    private func dismiss(from controller: PromptWindowController, reason: String?) {
+    func dismissActivePrompt(reason: String?) {
+        guard let prompt = activePrompt else { return }
         let now = Date()
-        try? historyStore.recordDismissal(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, reason: reason, at: now)
-        controller.closeAll()
+        try? historyStore.recordDismissal(dateKey: prompt.dateKey, windowID: prompt.downtimeWindow.id, reason: reason, at: now)
+        activePrompt = nil
         appState = .idle
         refreshStatus(now: now)
     }
 
-    private func autoExpirePrompt(controller: PromptWindowController, now: Date, downtimeEnded: Bool) {
+    private func autoExpirePrompt(prompt: ActivePrompt, now: Date, downtimeEnded: Bool) {
         if !downtimeEnded {
             try? historyStore.recordDismissal(
-                dateKey: controller.dateKey,
-                windowID: controller.downtimeWindow.id,
+                dateKey: prompt.dateKey,
+                windowID: prompt.downtimeWindow.id,
                 reason: nil,
                 at: now
             )
         }
-        controller.closeAll()
+        activePrompt = nil
         appState = .idle
     }
 
     private func closePromptIfShowing() {
-        if case .prompting(let controller, _) = appState {
-            controller.closeAll()
-        }
+        activePrompt = nil
     }
 
     // MARK: - Status
@@ -422,6 +402,14 @@ final class AppModel: ObservableObject {
     }
 }
 
+struct ActivePrompt: Identifiable {
+    let id = UUID()
+    let downtimeWindow: DowntimeWindow
+    let dateKey: String
+    let config: AppConfig
+    let escalation: EscalationState
+}
+
 private enum AppState {
     case idle
     case downtimeNormal
@@ -429,5 +417,5 @@ private enum AppState {
     case monitoring(until: Date)
     case snoozed(until: Date)
     case paused(until: Date)
-    case prompting(controller: PromptWindowController, shownAt: Date)
+    case prompting(prompt: ActivePrompt, shownAt: Date)
 }

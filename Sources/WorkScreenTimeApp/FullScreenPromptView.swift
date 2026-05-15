@@ -94,7 +94,7 @@ struct FullScreenPromptView: View {
                             .foregroundStyle(.white.opacity(0.72))
                         TextField(config.escalation.confirmationPhrase, text: $phrase)
                             .textFieldStyle(.roundedBorder)
-                            .onChange(of: phrase) { _ in
+                            .onChange(of: phrase) {
                                 attemptedAction = false
                             }
                     }
@@ -107,7 +107,7 @@ struct FullScreenPromptView: View {
                             .foregroundStyle(.white.opacity(0.72))
                         TextField("One real sentence, at least \(minimumReasonLength) characters", text: $reason)
                             .textFieldStyle(.roundedBorder)
-                            .onChange(of: reason) { _ in
+                            .onChange(of: reason) {
                                 attemptedAction = false
                             }
                     }
