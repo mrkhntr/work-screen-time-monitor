@@ -16,8 +16,7 @@ final class PromptWindowController {
     private var isRebuildingWindows = false
     private var needsAnotherRebuild = false
     private var lastScreenSignature: [ScreenSignature] = []
-    // Keep two decimal places to smooth floating-point jitter in frame and scale values.
-    private let screenSignatureMultiplier = 100.0
+    private let screenSignatureMultiplier = 100.0 // Two decimal places smooth frame/scale jitter.
     private var didFinish = false
 
     init(
@@ -136,11 +135,8 @@ final class PromptWindowController {
         let scale: Int
 
         static func < (lhs: ScreenSignature, rhs: ScreenSignature) -> Bool {
-            if lhs.x != rhs.x { return lhs.x < rhs.x }
-            if lhs.y != rhs.y { return lhs.y < rhs.y }
-            if lhs.width != rhs.width { return lhs.width < rhs.width }
-            if lhs.height != rhs.height { return lhs.height < rhs.height }
-            return lhs.scale < rhs.scale
+            (lhs.x, lhs.y, lhs.width, lhs.height, lhs.scale)
+                < (rhs.x, rhs.y, rhs.width, rhs.height, rhs.scale)
         }
     }
 
