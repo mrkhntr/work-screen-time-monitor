@@ -80,6 +80,16 @@ struct FullScreenPromptView: View {
                     .foregroundStyle(.white.opacity(0.82))
                     .frame(maxWidth: 760)
 
+                AsyncImage(url: URL(string: "https://gifroz.vercel.app/")) { image in
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } placeholder: {
+                    Color.white.opacity(0.05)
+                }
+                .frame(width: 240, height: 240)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+
                 if !requirementRows.isEmpty {
                     RequirementChecklist(rows: requirementRows)
                 }
