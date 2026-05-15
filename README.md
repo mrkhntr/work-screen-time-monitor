@@ -2,6 +2,15 @@
 
 A local macOS menu bar utility that nudges you out of work during configured downtime windows. It sends a normal macOS notification before downtime, watches for keyboard/mouse activity during downtime, and shows a full-screen prompt when you are still active.
 
+## Product And Engineering Principles
+
+- Prefer SwiftUI for app UI, settings, menus, prompt content, and new user-facing surfaces.
+- Use AppKit only as a small adapter when SwiftUI does not expose the required macOS behavior, such as screen-saver-level prompt windows across every connected display.
+- Prefer built-in Apple frameworks over custom infrastructure. If a feature can be simplified by using a native SwiftUI or macOS API, simplify it.
+- Use `https://sosumi.ai/` as the preferred Apple documentation lookup path for SwiftUI, AppKit, and other Apple framework API checks.
+- Keep the app local, understandable, and boring to maintain. Avoid broad abstractions unless they remove real complexity.
+- Use Docusaurus for the friend-facing download/docs site in `website/`.
+
 ## What It Does
 
 - Runs as a SwiftUI `MenuBarExtra` menu bar app.
