@@ -15,7 +15,7 @@ final class PromptWindowController {
     private var screenChangeObserver: NSObjectProtocol?
     private var isRebuildingWindows = false
     private var needsAnotherRebuild = false
-    private var lastScreenSignature: [String] = []
+    private var lastScreenSignature: [ScreenSignature] = []
     private var didFinish = false
 
     init(
@@ -43,7 +43,6 @@ final class PromptWindowController {
     func closeAll() {
         windows.forEach { $0.close() }
         windows.removeAll()
-        lastScreenSignature = []
         removeScreenChangeObserver()
     }
 
@@ -92,28 +91,52 @@ final class PromptWindowController {
             return
         }
         isRebuildingWindows = true
-        rebuildWindowsForCurrentScreens(screenSignature: screenSignature)
-        isRebuildingWindows = false
-        if needsAnotherRebuild {
-            needsAnotherRebuild = false
-            requestRebuildForCurrentScreens()
+        defer {
+            isRebuildingWindows = false
+            if needsAnotherRebuild {
+                needsAnotherRebuild = false
+                requestRebuildForCurrentScreens()
+            }
         }
+        rebuildWindowsForCurrentScreens(screenSignature: screenSignature)
     }
 
-    private func rebuildWindowsForCurrentScreens(screenSignature: [String]) {
+    private func rebuildWindowsForCurrentScreens(screenSignature: [ScreenSignature]) {
         windows.forEach { $0.close() }
         windows.removeAll()
         lastScreenSignature = screenSignature
         windows = NSScreen.screens.map(makeWindow(for:))
     }
 
-    private func currentScreenSignature() -> [String] {
+    private func currentScreenSignature() -> [ScreenSignature] {
         NSScreen.screens
             .map { screen in
                 let frame = screen.frame
-                return "\(frame.origin.x),\(frame.origin.y),\(frame.size.width),\(frame.size.height),\(screen.backingScaleFactor)"
+                return ScreenSignature(
+                    x: Int((frame.origin.x * 100).rounded()),
+                    y: Int((frame.origin.y * 100).rounded()),
+                    width: Int((frame.size.width * 100).rounded()),
+                    height: Int((frame.size.height * 100).rounded()),
+                    scale: Int((screen.backingScaleFactor * 100).rounded())
+                )
             }
             .sorted()
+    }
+
+    private struct ScreenSignature: Hashable, Comparable {
+        let x: Int
+        let y: Int
+        let width: Int
+        let height: Int
+        let scale: Int
+
+        static func < (lhs: ScreenSignature, rhs: ScreenSignature) -> Bool {
+            if lhs.x != rhs.x { return lhs.x < rhs.x }
+            if lhs.y != rhs.y { return lhs.y < rhs.y }
+            if lhs.width != rhs.width { return lhs.width < rhs.width }
+            if lhs.height != rhs.height { return lhs.height < rhs.height }
+            return lhs.scale < rhs.scale
+        }
     }
 
     private func makeWindow(for screen: NSScreen) -> NSWindow {
