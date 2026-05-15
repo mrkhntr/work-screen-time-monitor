@@ -13,6 +13,8 @@ final class PromptWindowController {
     private let onDismiss: (PromptWindowController, String?) -> Void
     private var windows: [NSWindow] = []
     private var screenChangeObserver: NSObjectProtocol?
+    private var isRebuildingWindows = false
+    private var needsAnotherRebuild = false
     private var didFinish = false
 
     init(
@@ -33,7 +35,7 @@ final class PromptWindowController {
 
     func show() {
         installScreenChangeObserverIfNeeded()
-        rebuildWindowsForCurrentScreens()
+        requestRebuildForCurrentScreens()
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -66,7 +68,7 @@ final class PromptWindowController {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.rebuildWindowsForCurrentScreens()
+            self?.requestRebuildForCurrentScreens()
         }
     }
 
@@ -74,6 +76,21 @@ final class PromptWindowController {
         guard let screenChangeObserver else { return }
         NotificationCenter.default.removeObserver(screenChangeObserver)
         self.screenChangeObserver = nil
+    }
+
+    private func requestRebuildForCurrentScreens() {
+        guard !didFinish else { return }
+        guard !isRebuildingWindows else {
+            needsAnotherRebuild = true
+            return
+        }
+        isRebuildingWindows = true
+        rebuildWindowsForCurrentScreens()
+        isRebuildingWindows = false
+        if needsAnotherRebuild {
+            needsAnotherRebuild = false
+            requestRebuildForCurrentScreens()
+        }
     }
 
     private func rebuildWindowsForCurrentScreens() {
