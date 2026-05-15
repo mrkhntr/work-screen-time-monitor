@@ -30,6 +30,34 @@ public struct ScheduleEngine: Sendable {
         return nil
     }
 
+    public func nextDowntimeWindow(at date: Date, config: AppConfig, limit: Int = 14) -> DowntimeWindow? {
+        if let active = activeWindow(at: date, config: config) {
+            return active
+        }
+
+        guard limit > 0 else {
+            return nil
+        }
+
+        let searchStart = calendar.startOfDay(for: date)
+
+        for dayOffset in 0..<limit {
+            guard let day = calendar.date(byAdding: .day, value: dayOffset, to: searchStart),
+                  let weekday = Weekday(rawValue: calendar.component(.weekday, from: day)),
+                  let schedule = config.schedule(for: weekday),
+                  schedule.isEnabled else {
+                continue
+            }
+
+            let window = downtimeWindow(for: schedule, on: day)
+            if window.start > date {
+                return window
+            }
+        }
+
+        return nil
+    }
+
     public func downtimeWindow(for schedule: DaySchedule, on day: Date) -> DowntimeWindow {
         let dayStart = calendar.startOfDay(for: day)
         let start = date(on: dayStart, time: schedule.start)
@@ -98,6 +126,7 @@ public struct ScheduleEngine: Sendable {
             snoozeCount: snoozeCount,
             title: title,
             message: baseMessage,
+            confirmationPhrase: Self.confirmationPhrase(config: config, quote: quote),
             requiresHold: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.holdRequiredAtSnoozeCount),
             requiresPhrase: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.phraseRequiredAtSnoozeCount),
             requiresReason: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.reasonRequiredAtSnoozeCount)
@@ -119,6 +148,10 @@ public struct ScheduleEngine: Sendable {
 
     private static func minutesDescription(_ minutes: Int) -> String {
         minutes == 1 ? "1 more minute" : "\(minutes) more minutes"
+    }
+
+    private static func confirmationPhrase(config: AppConfig, quote: String?) -> String {
+        quote?.nilIfBlank ?? config.escalation.confirmationPhrase
     }
 
     private static func hasReachedEscalationThreshold(_ snoozeCount: Int, threshold: Int) -> Bool {

@@ -172,6 +172,13 @@ public struct DowntimeWindow: Codable, Equatable, Sendable {
     public var weekday: Weekday
     public var start: Date
     public var end: Date
+
+    public init(id: String, weekday: Weekday, start: Date, end: Date) {
+        self.id = id
+        self.weekday = weekday
+        self.start = start
+        self.end = end
+    }
 }
 
 public enum HistoryEventType: String, Codable, Sendable {
@@ -247,6 +254,7 @@ public struct EscalationState: Equatable, Sendable {
     public var snoozeCount: Int
     public var title: String
     public var message: String
+    public var confirmationPhrase: String
     public var requiresHold: Bool
     public var requiresPhrase: Bool
     public var requiresReason: Bool

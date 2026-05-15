@@ -119,6 +119,21 @@ final class AppModel: ObservableObject {
         refreshStatus(now: now)
     }
 
+    func enforceNow() {
+        let now = Date()
+        if case .prompting = appState {
+            return
+        }
+
+        cancelResume()
+        closePromptIfShowing()
+
+        let dateKey = engine.dateKey(for: now)
+        let summary = historyStore.summary(for: dateKey)
+        let window = manualDowntimeWindow(at: now, dateKey: dateKey)
+        showPrompt(for: window, dateKey: dateKey, summary: summary, now: now)
+    }
+
     func resumeNow() {
         let now = Date()
         closePromptIfShowing()
@@ -295,6 +310,19 @@ final class AppModel: ObservableObject {
         appState = .prompting(controller: controller, shownAt: now)
         controller.show()
         refreshStatus(now: now)
+    }
+
+    private func manualDowntimeWindow(at now: Date, dateKey: String) -> DowntimeWindow {
+        let weekday = Calendar.autoupdatingCurrent.component(.weekday, from: now)
+        let end = engine.nextDowntimeWindow(at: now, config: config)?.end
+            ?? now.addingTimeInterval(3_600)
+
+        return DowntimeWindow(
+            id: "manual-\(dateKey)-\(Int(now.timeIntervalSince1970))",
+            weekday: Weekday(rawValue: weekday) ?? .monday,
+            start: now,
+            end: end
+        )
     }
 
     private func snooze(from controller: PromptWindowController) {

@@ -229,7 +229,7 @@ The SwiftUI Settings window edits the same JSON config. You can also edit the JS
 - 0 snoozes: gentle reminder and quote.
 - 1 snooze: firmer reminder.
 - 2 snoozes: snooze/dismiss requires holding the unlock button.
-- 3+ snoozes: snooze/dismiss requires holding the unlock button, typing `I am done for today`, and writing a short reason.
+- 3+ snoozes: snooze/dismiss requires holding the unlock button, typing the current work-life-balance prompt exactly, and writing a short reason.
 
 Snooze remains available at every level.
 

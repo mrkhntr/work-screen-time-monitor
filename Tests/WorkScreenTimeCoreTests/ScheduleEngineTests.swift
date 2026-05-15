@@ -150,6 +150,36 @@ final class ScheduleEngineTests: XCTestCase {
         XCTAssertEqual(next?.warningDate, makeDate(year: 2026, month: 5, day: 13, hour: 18, minute: 0))
     }
 
+    func testNextDowntimeWindowReturnsActiveWindow() {
+        let config = AppConfig.default
+        let now = makeDate(year: 2026, month: 5, day: 13, hour: 19, minute: 0)
+
+        let window = engine.nextDowntimeWindow(at: now, config: config)
+
+        XCTAssertEqual(window?.start, makeDate(year: 2026, month: 5, day: 13, hour: 18, minute: 0))
+        XCTAssertEqual(window?.end, makeDate(year: 2026, month: 5, day: 14, hour: 6, minute: 0))
+    }
+
+    func testNextDowntimeWindowReturnsUpcomingWindowWhenOutsideDowntime() {
+        let config = AppConfig.default
+        let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
+
+        let window = engine.nextDowntimeWindow(at: now, config: config)
+
+        XCTAssertEqual(window?.start, makeDate(year: 2026, month: 5, day: 13, hour: 18, minute: 0))
+        XCTAssertEqual(window?.end, makeDate(year: 2026, month: 5, day: 14, hour: 6, minute: 0))
+    }
+
+    func testNextDowntimeWindowReturnsNilWhenNoScheduleFoundWithinLimit() {
+        var config = AppConfig.default
+        config.schedules = config.schedules.map {
+            DaySchedule(weekday: $0.weekday, isEnabled: false, start: $0.start, end: $0.end)
+        }
+        let now = makeDate(year: 2026, month: 5, day: 13, hour: 12, minute: 0)
+
+        XCTAssertNil(engine.nextDowntimeWindow(at: now, config: config))
+    }
+
     func testEscalationThresholds() {
         let config = AppConfig.default
 
@@ -194,6 +224,28 @@ final class ScheduleEngineTests: XCTestCase {
         XCTAssertNotEqual(
             engine.escalationState(snoozeCount: 1, config: config, quote: "Close it down.").message,
             "Close it down."
+        )
+    }
+
+    func testEscalationUsesProvidedQuoteAsConfirmationPhrase() {
+        let config = AppConfig.default
+
+        XCTAssertEqual(
+            engine.escalationState(snoozeCount: 3, config: config, quote: "Rest belongs on the calendar.").confirmationPhrase,
+            "Rest belongs on the calendar."
+        )
+    }
+
+    func testEscalationFallsBackToConfiguredConfirmationPhraseWhenQuoteIsBlank() {
+        let config = AppConfig(
+            schedules: AppConfig.default.schedules,
+            quotes: AppConfig.defaultQuotes,
+            escalation: EscalationConfig(confirmationPhrase: "I am closing work")
+        )
+
+        XCTAssertEqual(
+            engine.escalationState(snoozeCount: 3, config: config, quote: "   ").confirmationPhrase,
+            "I am closing work"
         )
     }
 

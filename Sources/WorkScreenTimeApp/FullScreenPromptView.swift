@@ -25,7 +25,7 @@ struct FullScreenPromptView: View {
             escalation.requiresPhrase ? Requirement(
                 id: "phrase", label: "Type the phrase exactly",
                 message: "Type the confirmation phrase exactly.",
-                isComplete: formState.phrase == config.escalation.confirmationPhrase
+                isComplete: ConfirmationPhraseMatcher.matches(formState.phrase, phrase: escalation.confirmationPhrase)
             ) : nil,
             escalation.requiresReason ? Requirement(
                 id: "reason", label: "Write a real reason",
@@ -75,9 +75,9 @@ struct FullScreenPromptView: View {
 
                 if escalation.requiresPhrase {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Type: \(config.escalation.confirmationPhrase)")
+                        Text("Type: \(escalation.confirmationPhrase)")
                             .foregroundStyle(.white.opacity(0.72))
-                        TextField(config.escalation.confirmationPhrase, text: $formState.phrase)
+                        TextField(escalation.confirmationPhrase, text: $formState.phrase)
                             .textFieldStyle(.roundedBorder)
                             .onChange(of: formState.phrase) { _ in
                                 formState.attemptedAction = false

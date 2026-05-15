@@ -12,6 +12,12 @@ struct MenuBarContentView: View {
 
             Divider()
 
+            Button("Enforce Now") {
+                model.enforceNow()
+            }
+
+            Divider()
+
             Button("Settings...") {
                 model.openSettings()
             }
@@ -24,18 +30,6 @@ struct MenuBarContentView: View {
                 }
                 Button("Pause Until Tomorrow") {
                     model.pauseUntilTomorrow()
-                }
-            }
-
-            if model.showsResumeAction {
-                if let countdown = model.resumeCountdown {
-                    Button("Cancel Resume (\(countdown)s)") {
-                        model.cancelResume()
-                    }
-                } else {
-                    Button("Resume Now") {
-                        model.startResumeCountdown()
-                    }
                 }
             }
 
