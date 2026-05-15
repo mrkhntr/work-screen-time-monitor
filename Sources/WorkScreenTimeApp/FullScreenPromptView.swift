@@ -99,32 +99,8 @@ struct FullScreenPromptView: View {
                     .frame(width: 420)
                 }
 
-                ZStack {
-                    Button(formState.selectedAction.title(snoozeMinutes: config.snoozeMinutes)) {
-                        performSelectedAction()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .controlSize(.large)
-                    .font(.system(size: 20, weight: .semibold))
-                    .frame(minWidth: 180)
-
-                    HStack {
-                        Spacer()
-                            .frame(width: 206)
-                        Menu {
-                            Button(formState.selectedAction.alternate.title(snoozeMinutes: config.snoozeMinutes)) {
-                                formState.selectedAction = formState.selectedAction.alternate
-                                formState.attemptedAction = false
-                            }
-                        } label: {
-                            Text("Switch")
-                                .frame(width: 54, height: 18)
-                        }
-                        .menuStyle(.borderlessButton)
-                        .controlSize(.large)
-                    }
-                }
-                .frame(width: 260)
+                Color.clear
+                    .frame(width: BouncingActionCluster.clusterSize.width, height: BouncingActionCluster.clusterSize.height)
                 .padding(.top, 4)
 
                 if !validationMessages.isEmpty && (formState.attemptedAction || escalation.requiresHold) {
@@ -140,6 +116,12 @@ struct FullScreenPromptView: View {
             }
             .padding(40)
             .frame(maxWidth: 920)
+
+            BouncingActionCluster(
+                config: config,
+                formState: formState,
+                onPrimaryAction: performSelectedAction
+            )
         }
     }
 
@@ -183,6 +165,173 @@ private struct RequirementChecklist: View {
         .padding(.vertical, 14)
         .background(Color.white.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+}
+
+private struct BouncingActionCluster: View {
+    static let clusterSize = CGSize(width: 260, height: 48)
+
+    private let margin: CGFloat = 32
+    private let timer = Timer.publish(every: 1.0 / 30.0, on: .main, in: .common).autoconnect()
+
+    let config: AppConfig
+    @ObservedObject var formState: PromptFormState
+    let onPrimaryAction: () -> Void
+
+    @State private var position = CGPoint.zero
+    @State private var velocity = CGVector(dx: 38, dy: -31)
+    @State private var lastTick: Date?
+    @State private var isSwitchOpen = false
+    @State private var hasInitializedPosition = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            PromptActionCluster(
+                config: config,
+                formState: formState,
+                isSwitchOpen: $isSwitchOpen,
+                onPrimaryAction: onPrimaryAction
+            )
+            .frame(width: Self.clusterSize.width, height: Self.clusterSize.height)
+            .position(displayPosition(in: proxy.size))
+            .onAppear {
+                initializePositionIfNeeded(in: proxy.size)
+            }
+            .onChange(of: proxy.size) { newSize in
+                constrainPosition(to: newSize)
+            }
+            .onReceive(timer) { now in
+                updatePosition(now: now, in: proxy.size)
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    private func displayPosition(in size: CGSize) -> CGPoint { currentPosition(in: size) }
+
+    private func currentPosition(in size: CGSize) -> CGPoint {
+        hasInitializedPosition ? position : initialPosition(in: size)
+    }
+
+    private func initializePositionIfNeeded(in size: CGSize) {
+        guard !hasInitializedPosition else { return }
+        position = initialPosition(in: size)
+        hasInitializedPosition = true
+        lastTick = Date()
+    }
+
+    private func initialPosition(in size: CGSize) -> CGPoint {
+        let bounds = movementBounds(in: size)
+        return CGPoint(
+            x: clamp(size.width / 2, min: bounds.minX, max: bounds.maxX),
+            y: clamp(size.height * 0.72, min: bounds.minY, max: bounds.maxY)
+        )
+    }
+
+    private func updatePosition(now: Date, in size: CGSize) {
+        initializePositionIfNeeded(in: size)
+
+        guard !isSwitchOpen else {
+            lastTick = now
+            return
+        }
+
+        let elapsed = min(now.timeIntervalSince(lastTick ?? now), 0.1)
+        lastTick = now
+
+        var nextPosition = position
+        var nextVelocity = velocity
+        let bounds = movementBounds(in: size)
+
+        nextPosition.x += nextVelocity.dx * elapsed
+        nextPosition.y += nextVelocity.dy * elapsed
+
+        if nextPosition.x <= bounds.minX {
+            nextPosition.x = bounds.minX
+            nextVelocity.dx = abs(nextVelocity.dx)
+        } else if nextPosition.x >= bounds.maxX {
+            nextPosition.x = bounds.maxX
+            nextVelocity.dx = -abs(nextVelocity.dx)
+        }
+
+        if nextPosition.y <= bounds.minY {
+            nextPosition.y = bounds.minY
+            nextVelocity.dy = abs(nextVelocity.dy)
+        } else if nextPosition.y >= bounds.maxY {
+            nextPosition.y = bounds.maxY
+            nextVelocity.dy = -abs(nextVelocity.dy)
+        }
+
+        position = nextPosition
+        velocity = nextVelocity
+    }
+
+    private func constrainPosition(to size: CGSize) {
+        guard hasInitializedPosition else { return }
+
+        let bounds = movementBounds(in: size)
+        position = CGPoint(
+            x: clamp(position.x, min: bounds.minX, max: bounds.maxX),
+            y: clamp(position.y, min: bounds.minY, max: bounds.maxY)
+        )
+    }
+
+    private func movementBounds(in size: CGSize) -> CGRect {
+        let halfWidth = Self.clusterSize.width / 2
+        let halfHeight = Self.clusterSize.height / 2
+        let minX = halfWidth + margin
+        let maxX = max(minX, size.width - halfWidth - margin)
+        let minY = halfHeight + margin
+        let maxY = max(minY, size.height - halfHeight - margin)
+
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    private func clamp(_ value: CGFloat, min: CGFloat, max: CGFloat) -> CGFloat {
+        Swift.min(Swift.max(value, min), max)
+    }
+}
+
+private struct PromptActionCluster: View {
+    let config: AppConfig
+    @ObservedObject var formState: PromptFormState
+    @Binding var isSwitchOpen: Bool
+    let onPrimaryAction: () -> Void
+
+    var body: some View {
+        ZStack {
+            Button(formState.selectedAction.title(snoozeMinutes: config.snoozeMinutes)) {
+                onPrimaryAction()
+            }
+            .keyboardShortcut(.defaultAction)
+            .controlSize(.large)
+            .font(.system(size: 20, weight: .semibold))
+            .frame(minWidth: 180)
+
+            HStack {
+                Spacer()
+                    .frame(width: 206)
+                Button {
+                    isSwitchOpen.toggle()
+                } label: {
+                    Text("Switch")
+                        .frame(width: 54, height: 18)
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.large)
+                .popover(isPresented: $isSwitchOpen, arrowEdge: .bottom) {
+                    Button(formState.selectedAction.alternate.title(snoozeMinutes: config.snoozeMinutes)) {
+                        formState.selectedAction = formState.selectedAction.alternate
+                        formState.attemptedAction = false
+                        isSwitchOpen = false
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .padding(12)
+                }
+            }
+        }
+        .frame(width: BouncingActionCluster.clusterSize.width, height: BouncingActionCluster.clusterSize.height)
     }
 }
 
