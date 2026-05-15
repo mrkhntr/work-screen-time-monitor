@@ -15,6 +15,7 @@ final class PromptWindowController {
     private var screenChangeObserver: NSObjectProtocol?
     private var isRebuildingWindows = false
     private var needsAnotherRebuild = false
+    private var lastScreenSignature: [String] = []
     private var didFinish = false
 
     init(
@@ -42,6 +43,7 @@ final class PromptWindowController {
     func closeAll() {
         windows.forEach { $0.close() }
         windows.removeAll()
+        lastScreenSignature = []
         removeScreenChangeObserver()
     }
 
@@ -79,13 +81,18 @@ final class PromptWindowController {
     }
 
     private func requestRebuildForCurrentScreens() {
+        assert(Thread.isMainThread)
         guard !didFinish else { return }
+        let screenSignature = currentScreenSignature()
+        if !windows.isEmpty, screenSignature == lastScreenSignature {
+            return
+        }
         guard !isRebuildingWindows else {
             needsAnotherRebuild = true
             return
         }
         isRebuildingWindows = true
-        rebuildWindowsForCurrentScreens()
+        rebuildWindowsForCurrentScreens(screenSignature: screenSignature)
         isRebuildingWindows = false
         if needsAnotherRebuild {
             needsAnotherRebuild = false
@@ -93,10 +100,20 @@ final class PromptWindowController {
         }
     }
 
-    private func rebuildWindowsForCurrentScreens() {
+    private func rebuildWindowsForCurrentScreens(screenSignature: [String]) {
         windows.forEach { $0.close() }
         windows.removeAll()
+        lastScreenSignature = screenSignature
         windows = NSScreen.screens.map(makeWindow(for:))
+    }
+
+    private func currentScreenSignature() -> [String] {
+        NSScreen.screens
+            .map { screen in
+                let frame = screen.frame
+                return "\(frame.origin.x),\(frame.origin.y),\(frame.size.width),\(frame.size.height),\(screen.backingScaleFactor)"
+            }
+            .sorted()
     }
 
     private func makeWindow(for screen: NSScreen) -> NSWindow {
