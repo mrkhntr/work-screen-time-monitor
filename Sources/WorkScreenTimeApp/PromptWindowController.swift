@@ -104,6 +104,7 @@ final class PromptWindowController {
     }
 
     private func makeWindow(for screen: NSScreen) -> NSWindow {
+        let screenFrame = screen.frame
         let view = FullScreenPromptView(
             config: config,
             escalation: escalation,
@@ -112,17 +113,22 @@ final class PromptWindowController {
         )
 
         let window = PromptWindow(
-            contentRect: screen.frame,
+            contentRect: NSRect(origin: .zero, size: screenFrame.size),
             styleMask: [.borderless],
             backing: .buffered,
             defer: false,
             screen: screen
         )
-        window.contentView = NSHostingView(rootView: view)
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = NSRect(origin: .zero, size: screenFrame.size)
+        hostingView.autoresizingMask = [.width, .height]
+
+        window.contentView = hostingView
         window.backgroundColor = .black
         window.level = .screenSaver
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         window.isReleasedWhenClosed = false
+        window.setFrame(screenFrame, display: true)
         window.makeKeyAndOrderFront(nil)
         return window
     }
