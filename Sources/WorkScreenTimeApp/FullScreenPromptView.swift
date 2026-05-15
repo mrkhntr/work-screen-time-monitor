@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import WorkScreenTimeCore
@@ -15,6 +16,7 @@ struct FullScreenPromptView: View {
     @State private var reason = ""
     @State private var selectedAction: PromptAction = .snooze
     @State private var attemptedAction = false
+    @State private var gifData: Data?
 
     private var canDismiss: Bool {
         let holdOK = !escalation.requiresHold || holdUnlocked
@@ -79,6 +81,12 @@ struct FullScreenPromptView: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white.opacity(0.82))
                     .frame(maxWidth: 760)
+
+                if let gifData {
+                    AnimatedImageView(data: gifData)
+                        .frame(width: 240, height: 240)
+                        .clipShape(RoundedRectangle(cornerRadius: 16))
+                }
 
                 if !requirementRows.isEmpty {
                     RequirementChecklist(rows: requirementRows)
@@ -156,6 +164,10 @@ struct FullScreenPromptView: View {
             .padding(40)
             .frame(maxWidth: 920)
         }
+        .task {
+            guard let url = URL(string: "https://gifroz.vercel.app/") else { return }
+            gifData = try? await URLSession.shared.data(from: url).0
+        }
     }
 
     private func performSelectedAction() {
@@ -228,6 +240,21 @@ private enum PromptAction {
         case .dismiss:
             "Dismiss for today"
         }
+    }
+}
+
+private struct AnimatedImageView: NSViewRepresentable {
+    let data: Data
+
+    func makeNSView(context: Context) -> NSImageView {
+        let view = NSImageView()
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.animates = true
+        return view
+    }
+
+    func updateNSView(_ nsView: NSImageView, context: Context) {
+        nsView.image = NSImage(data: data)
     }
 }
 
