@@ -11,52 +11,32 @@ struct FullScreenPromptView: View {
     let onDismiss: (String?) -> Void
     @ObservedObject var formState: PromptFormState
 
-    private var canDismiss: Bool {
-        let holdOK = !escalation.requiresHold || formState.holdUnlocked
-        let phraseOK = !escalation.requiresPhrase || formState.phrase == config.escalation.confirmationPhrase
-        let reasonOK = !escalation.requiresReason || reasonText.count >= minimumReasonLength
-        return holdOK && phraseOK && reasonOK
-    }
-
     private var reasonText: String {
         formState.reason.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var validationMessages: [String] {
-        var messages: [String] = []
-
-        if escalation.requiresHold && !formState.holdUnlocked {
-            messages.append("Hold the unlock control for 2 seconds.")
-        }
-
-        if escalation.requiresPhrase && formState.phrase != config.escalation.confirmationPhrase {
-            messages.append("Type the confirmation phrase exactly.")
-        }
-
-        if escalation.requiresReason && reasonText.count < minimumReasonLength {
-            messages.append("Write a reason with at least \(minimumReasonLength) characters.")
-        }
-
-        return messages
+    private var requirements: [Requirement] {
+        [
+            escalation.requiresHold ? Requirement(
+                id: "hold", label: "Hold for 2 seconds",
+                message: "Hold the unlock control for 2 seconds.",
+                isComplete: formState.holdUnlocked
+            ) : nil,
+            escalation.requiresPhrase ? Requirement(
+                id: "phrase", label: "Type the phrase exactly",
+                message: "Type the confirmation phrase exactly.",
+                isComplete: formState.phrase == config.escalation.confirmationPhrase
+            ) : nil,
+            escalation.requiresReason ? Requirement(
+                id: "reason", label: "Write a real reason",
+                message: "Write a reason with at least \(minimumReasonLength) characters.",
+                isComplete: reasonText.count >= minimumReasonLength
+            ) : nil,
+        ].compactMap { $0 }
     }
 
-    private var requirementRows: [RequirementRow] {
-        var rows: [RequirementRow] = []
-
-        if escalation.requiresHold {
-            rows.append(RequirementRow(label: "Hold for 2 seconds", isComplete: formState.holdUnlocked))
-        }
-
-        if escalation.requiresPhrase {
-            rows.append(RequirementRow(label: "Type the phrase exactly", isComplete: formState.phrase == config.escalation.confirmationPhrase))
-        }
-
-        if escalation.requiresReason {
-            rows.append(RequirementRow(label: "Write a real reason", isComplete: reasonText.count >= minimumReasonLength))
-        }
-
-        return rows
-    }
+    private var canDismiss: Bool { requirements.allSatisfy(\.isComplete) }
+    private var validationMessages: [String] { requirements.filter { !$0.isComplete }.map(\.message) }
 
     var body: some View {
         ZStack {
@@ -85,8 +65,8 @@ struct FullScreenPromptView: View {
                 .frame(width: 240, height: 240)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
 
-                if !requirementRows.isEmpty {
-                    RequirementChecklist(rows: requirementRows)
+                if !requirements.isEmpty {
+                    RequirementChecklist(requirements: requirements)
                 }
 
                 if escalation.requiresHold {
@@ -173,14 +153,15 @@ struct FullScreenPromptView: View {
     }
 }
 
-private struct RequirementRow: Identifiable {
-    var id: String { label }
+private struct Requirement: Identifiable {
+    let id: String
     let label: String
+    let message: String
     let isComplete: Bool
 }
 
 private struct RequirementChecklist: View {
-    let rows: [RequirementRow]
+    let requirements: [Requirement]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -188,12 +169,12 @@ private struct RequirementChecklist: View {
                 .font(.callout.weight(.semibold))
                 .foregroundStyle(.white.opacity(0.78))
 
-            ForEach(rows) { row in
+            ForEach(requirements) { req in
                 HStack(spacing: 8) {
-                    Image(systemName: row.isComplete ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(row.isComplete ? Color.green : Color.white.opacity(0.45))
-                    Text(row.label)
-                        .foregroundStyle(row.isComplete ? Color.white.opacity(0.82) : Color.white.opacity(0.64))
+                    Image(systemName: req.isComplete ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(req.isComplete ? Color.green : Color.white.opacity(0.45))
+                    Text(req.label)
+                        .foregroundStyle(req.isComplete ? Color.white.opacity(0.82) : Color.white.opacity(0.64))
                 }
                 .font(.callout)
             }
