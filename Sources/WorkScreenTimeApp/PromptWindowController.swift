@@ -12,6 +12,8 @@ final class PromptWindowController {
     private let onSnooze: (PromptWindowController) -> Void
     private let onDismiss: (PromptWindowController, String?) -> Void
     private var windows: [NSWindow] = []
+    private var screenChangeObserver: NSObjectProtocol?
+    private var screenRebuildTask: Task<Void, Never>?
     private var didFinish = false
 
     init(
@@ -31,34 +33,18 @@ final class PromptWindowController {
     }
 
     func show() {
-        windows = NSScreen.screens.map { screen in
-            let view = FullScreenPromptView(
-                config: config,
-                escalation: escalation,
-                onSnooze: { [weak self] in self?.finishSnooze() },
-                onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) }
-            )
-
-            let window = PromptWindow(
-                contentRect: screen.frame,
-                styleMask: [.borderless],
-                backing: .buffered,
-                defer: false,
-                screen: screen
-            )
-            window.contentView = NSHostingView(rootView: view)
-            window.backgroundColor = .black
-            window.level = .screenSaver
-            window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-            window.isReleasedWhenClosed = false
-            window.makeKeyAndOrderFront(nil)
-            return window
-        }
-
+        installScreenChangeObserver()
+        rebuildWindowsForCurrentScreens()
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func closeAll() {
+        cancelPendingScreenRebuild()
+        removeScreenChangeObserver()
+        closeWindows()
+    }
+
+    private func closeWindows() {
         windows.forEach { $0.close() }
         windows.removeAll()
     }
@@ -74,10 +60,81 @@ final class PromptWindowController {
         didFinish = true
         onDismiss(self, reason)
     }
+
+    private func installScreenChangeObserver() {
+        guard screenChangeObserver == nil else { return }
+        screenChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.scheduleScreenRebuild()
+            }
+        }
+    }
+
+    private func removeScreenChangeObserver() {
+        guard let screenChangeObserver else { return }
+        NotificationCenter.default.removeObserver(screenChangeObserver)
+        self.screenChangeObserver = nil
+    }
+
+    private func scheduleScreenRebuild() {
+        guard !didFinish else { return }
+        cancelPendingScreenRebuild()
+
+        screenRebuildTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 250_000_000)
+            guard !Task.isCancelled else { return }
+
+            self?.rebuildWindowsForCurrentScreens()
+            NSApp.activate(ignoringOtherApps: true)
+        }
+    }
+
+    private func cancelPendingScreenRebuild() {
+        screenRebuildTask?.cancel()
+        screenRebuildTask = nil
+    }
+
+    private func rebuildWindowsForCurrentScreens() {
+        closeWindows()
+        windows = NSScreen.screens.map(makeWindow(for:))
+    }
+
+    private func makeWindow(for screen: NSScreen) -> NSWindow {
+        let screenFrame = screen.frame
+        let view = FullScreenPromptView(
+            config: config,
+            escalation: escalation,
+            onSnooze: { [weak self] in self?.finishSnooze() },
+            onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) }
+        )
+
+        let window = PromptWindow(
+            contentRect: NSRect(origin: .zero, size: screenFrame.size),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false,
+            screen: screen
+        )
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = NSRect(origin: .zero, size: screenFrame.size)
+        hostingView.autoresizingMask = [.width, .height]
+
+        window.contentView = hostingView
+        window.backgroundColor = .black
+        window.level = .screenSaver
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
+        window.isReleasedWhenClosed = false
+        window.setFrame(screenFrame, display: true)
+        window.makeKeyAndOrderFront(nil)
+        return window
+    }
 }
 
 private final class PromptWindow: NSWindow {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
-
