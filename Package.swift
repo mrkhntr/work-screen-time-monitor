@@ -22,6 +22,9 @@ let package = Package(
                 "WorkScreenTimeCore",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
+            resources: [
+                .process("Assets.xcassets")
+            ],
             linkerSettings: [
                 .linkedFramework("ServiceManagement")
             ]
