@@ -54,6 +54,8 @@ require_tool plutil
 require_tool ditto
 require_tool install_name_tool
 require_tool otool
+require_tool iconutil
+require_tool sips
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -130,6 +132,23 @@ mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$CONTENTS_DIR/Resources"
 
 cd "$ROOT_DIR"
 
+# Build AppIcon.icns from the source PNG if needed
+ICON_SRC="$ROOT_DIR/Sources/WorkScreenTimeApp/Assets.xcassets/AppIcon.appiconset/APP_ICON.png"
+ICON_ROUNDED="$ROOT_DIR/.build/AppIcon_rounded.png"
+ICON_ICNS="$ROOT_DIR/.build/AppIcon.icns"
+if [[ ! -f "$ICON_ICNS" || "$ICON_SRC" -nt "$ICON_ICNS" ]]; then
+  swift "$ROOT_DIR/scripts/round_icon.swift" "$ICON_SRC" "$ICON_ROUNDED"
+  ICONSET=$(mktemp -d)/AppIcon.iconset
+  mkdir -p "$ICONSET"
+  for spec in "16:icon_16x16" "32:icon_16x16@2x" "32:icon_32x32" "64:icon_32x32@2x" \
+              "128:icon_128x128" "256:icon_128x128@2x" "256:icon_256x256" \
+              "512:icon_256x256@2x" "512:icon_512x512" "1024:icon_512x512@2x"; do
+    size="${spec%%:*}"; name="${spec##*:}"
+    sips -z "$size" "$size" "$ICON_ROUNDED" --out "$ICONSET/$name.png" > /dev/null
+  done
+  iconutil -c icns "$ICONSET" -o "$ICON_ICNS"
+fi
+
 swift build -c release
 
 BUILT_EXECUTABLE="$ROOT_DIR/.build/release/$APP_NAME"
@@ -149,6 +168,8 @@ if [[ -z "$SPARKLE_FRAMEWORK_SRC" ]]; then
 fi
 ditto "$SPARKLE_FRAMEWORK_SRC" "$FRAMEWORKS_DIR/Sparkle.framework"
 
+cp "$ICON_ICNS" "$CONTENTS_DIR/Resources/AppIcon.icns"
+
 APP_NAME_XML="$(xml_escape "$APP_NAME")"
 BUNDLE_NAME_XML="$(xml_escape "Work Screen Time")"
 BUNDLE_ID_XML="$(xml_escape "app.workscreentime.WorkScreenTimeApp")"
@@ -160,6 +181,8 @@ cat > "$INFO_PLIST" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundleDisplayName</key>
   <string>$BUNDLE_NAME_XML</string>
   <key>CFBundleExecutable</key>
