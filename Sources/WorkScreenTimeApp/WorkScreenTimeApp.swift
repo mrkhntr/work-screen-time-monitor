@@ -27,7 +27,7 @@ struct WorkScreenTimeApp: App {
 
         Settings {
             SettingsView(model: model)
-                .frame(minWidth: 760, minHeight: 640)
+                .frame(minWidth: 860, minHeight: 640)
         }
     }
 }

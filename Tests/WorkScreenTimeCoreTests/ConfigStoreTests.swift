@@ -48,6 +48,36 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(loaded.quotes, AppConfig.defaultQuotes)
     }
 
+    func testSaveNormalizesAccountabilityWebhook() throws {
+        var config = AppConfig.default
+        config.accountabilityWebhook = AccountabilityWebhookConfig(
+            isEnabled: true,
+            endpointURLString: "  https://example.com/hook  ",
+            bearerToken: "  token  ",
+            apiKey: "  api-key  ",
+            messageTemplate: "   "
+        )
+
+        try store.save(config)
+        let loaded = store.load()
+
+        XCTAssertEqual(loaded.accountabilityWebhook?.isEnabled, true)
+        XCTAssertEqual(loaded.accountabilityWebhook?.endpointURLString, "https://example.com/hook")
+        XCTAssertEqual(loaded.accountabilityWebhook?.bearerToken, "token")
+        XCTAssertEqual(loaded.accountabilityWebhook?.apiKey, "api-key")
+        XCTAssertEqual(loaded.accountabilityWebhook?.messageTemplate, AccountabilityWebhookConfig().messageTemplate)
+    }
+
+    func testSaveDisablesAccountabilityWebhookWithoutURL() throws {
+        var config = AppConfig.default
+        config.accountabilityWebhook = AccountabilityWebhookConfig(isEnabled: true, endpointURLString: " ")
+
+        try store.save(config)
+        let loaded = store.load()
+
+        XCTAssertEqual(loaded.accountabilityWebhook?.isEnabled, false)
+    }
+
     func testLoadNormalizesMissingScheduleRowsFromJSON() throws {
         let monday = DaySchedule(
             weekday: .monday,

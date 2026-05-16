@@ -81,6 +81,7 @@ public final class ConfigStore {
             copy.quotes = AppConfig.defaultQuotes
         }
         copy.escalation = normalized(copy.escalation)
+        copy.accountabilityWebhook = normalized(copy.accountabilityWebhook)
         return copy
     }
 
@@ -97,6 +98,21 @@ public final class ConfigStore {
             copy.confirmationPhrase = confirmationPhrase
         }
 
+        return copy
+    }
+
+    private func normalized(_ webhook: AccountabilityWebhookConfig?) -> AccountabilityWebhookConfig? {
+        guard var copy = webhook else { return nil }
+        copy.endpointURLString = copy.endpointURLString.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.bearerToken = copy.bearerToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.apiKey = copy.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.messageTemplate = copy.messageTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
+        if copy.messageTemplate.isEmpty {
+            copy.messageTemplate = AccountabilityWebhookConfig().messageTemplate
+        }
+        if copy.endpointURLString.isEmpty {
+            copy.isEnabled = false
+        }
         return copy
     }
 }

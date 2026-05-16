@@ -107,6 +107,28 @@ public struct EscalationConfig: Codable, Equatable, Sendable {
     }
 }
 
+public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var endpointURLString: String
+    public var bearerToken: String
+    public var apiKey: String
+    public var messageTemplate: String
+
+    public init(
+        isEnabled: Bool = false,
+        endpointURLString: String = "",
+        bearerToken: String = "",
+        apiKey: String = "",
+        messageTemplate: String = "I dismissed Work Screen Time because: {{reason}}"
+    ) {
+        self.isEnabled = isEnabled
+        self.endpointURLString = endpointURLString
+        self.bearerToken = bearerToken
+        self.apiKey = apiKey
+        self.messageTemplate = messageTemplate
+    }
+}
+
 public struct AppConfig: Codable, Equatable, Sendable {
     public var schedules: [DaySchedule]
     public var warningLeadMinutes: Int
@@ -114,6 +136,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var idleThresholdMinutes: Int
     public var quotes: [String]
     public var escalation: EscalationConfig
+    public var accountabilityWebhook: AccountabilityWebhookConfig?
 
     public init(
         schedules: [DaySchedule],
@@ -121,7 +144,8 @@ public struct AppConfig: Codable, Equatable, Sendable {
         snoozeMinutes: Int = 15,
         idleThresholdMinutes: Int = 1,
         quotes: [String],
-        escalation: EscalationConfig = EscalationConfig()
+        escalation: EscalationConfig = EscalationConfig(),
+        accountabilityWebhook: AccountabilityWebhookConfig? = nil
     ) {
         self.schedules = schedules
         self.warningLeadMinutes = warningLeadMinutes
@@ -129,6 +153,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         self.idleThresholdMinutes = idleThresholdMinutes
         self.quotes = quotes
         self.escalation = escalation
+        self.accountabilityWebhook = accountabilityWebhook
     }
 
     public static let defaultQuotes = [

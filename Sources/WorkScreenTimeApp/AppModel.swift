@@ -25,6 +25,7 @@ final class AppModel: ObservableObject {
     private let engine = ScheduleEngine()
     private let idleMonitor = IdleMonitor()
     private let notificationManager = NotificationManager()
+    private let accountabilityWebhookNotifier = AccountabilityWebhookNotifier()
     private var settingsWindow: NSWindow?
     private var mainTimer: Timer?
     private var countdownTimer: Timer?
@@ -152,7 +153,7 @@ final class AppModel: ObservableObject {
     func openSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 760, height: 680),
+                contentRect: NSRect(x: 0, y: 0, width: 880, height: 680),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
                 backing: .buffered,
                 defer: false
@@ -198,6 +199,15 @@ final class AppModel: ObservableObject {
 
     func sendTestNotification() {
         notificationManager.sendTest()
+    }
+
+    func sendTestAccountabilityWebhook() async -> String {
+        do {
+            try await accountabilityWebhookNotifier.sendTest(using: config.accountabilityWebhook)
+            return "Test webhook sent."
+        } catch {
+            return error.localizedDescription
+        }
     }
 
     func toggleLaunchAtLogin() {
@@ -338,9 +348,42 @@ final class AppModel: ObservableObject {
     private func dismiss(from controller: PromptWindowController, reason: String?) {
         let now = Date()
         try? historyStore.recordDismissal(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, reason: reason, at: now)
+        if let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
+            let snoozeCount = historyStore.summary(for: controller.dateKey).snoozes
+            sendAccountabilityWebhook(
+                kind: .dismissed,
+                timestamp: now,
+                dateKey: controller.dateKey,
+                windowID: controller.downtimeWindow.id,
+                snoozeCount: snoozeCount,
+                dismissalReason: reason
+            )
+        }
         controller.closeAll()
         appState = .idle
         refreshStatus(now: now)
+    }
+
+    private func sendAccountabilityWebhook(
+        kind: AccountabilityWebhookEventKind,
+        timestamp: Date,
+        dateKey: String,
+        windowID: String?,
+        snoozeCount: Int?,
+        dismissalReason: String?
+    ) {
+        let webhookConfig = config.accountabilityWebhook
+        let event = AccountabilityWebhookEvent(
+            kind: kind,
+            timestamp: timestamp,
+            dateKey: dateKey,
+            windowID: windowID,
+            snoozeCount: snoozeCount,
+            dismissalReason: dismissalReason
+        )
+        Task {
+            try? await accountabilityWebhookNotifier.send(event, using: webhookConfig)
+        }
     }
 
     private func autoExpirePrompt(controller: PromptWindowController, now: Date, downtimeEnded: Bool) {

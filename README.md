@@ -224,6 +224,26 @@ History:
 
 The SwiftUI Settings window edits the same JSON config. You can also edit the JSON directly while the app is quit.
 
+## Accountability Webhook
+
+Settings can send a `POST` request when a prompt is dismissed with a typed reason. The request is disabled by default and includes JSON shaped like:
+
+```json
+{
+  "event": "dismissed",
+  "app": "WorkScreenTimeApp",
+  "message": "I dismissed Work Screen Time because: I need to finish the deploy",
+  "timestamp": "2026-05-15T21:42:00Z",
+  "dateKey": "2026-05-15",
+  "windowID": "friday-2026-05-15",
+  "snoozeCount": 3,
+  "dismissalReason": "I need to finish the deploy"
+}
+```
+
+If a bearer token is configured, the app sends it as `Authorization: Bearer <token>`. If an API key is configured, the app sends it as `x-api-key: <key>`.
+The message template supports `{{reason}}`, `{{event}}`, `{{timestamp}}`, `{{dateKey}}`, `{{windowID}}`, and `{{snoozeCount}}`.
+
 ## Escalation
 
 - 0 snoozes: gentle reminder and quote.
