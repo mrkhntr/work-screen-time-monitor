@@ -18,6 +18,7 @@ struct AccountabilityWebhookEvent: Sendable {
 enum AccountabilityWebhookError: LocalizedError {
     case disabledOrMissingURL
     case invalidURL
+    case invalidBodyTemplate
     case serverError(Int)
 
     var errorDescription: String? {
@@ -26,6 +27,8 @@ enum AccountabilityWebhookError: LocalizedError {
             "Webhook is disabled or missing a URL."
         case .invalidURL:
             "Webhook URL is invalid."
+        case .invalidBodyTemplate:
+            "Webhook body template is not valid JSON."
         case .serverError(let statusCode):
             "Webhook returned HTTP \(statusCode)."
         }
@@ -55,7 +58,7 @@ struct AccountabilityWebhookNotifier {
                 dateKey: "test",
                 windowID: nil,
                 snoozeCount: nil,
-                dismissalReason: nil
+                dismissalReason: "Test accountability webhook"
             ),
             using: config
         )
@@ -78,8 +81,11 @@ struct AccountabilityWebhookNotifier {
         if !config.apiKey.isEmpty {
             request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
         }
+        for header in config.headers where header.isEnabled && !header.name.isEmpty {
+            request.setValue(header.value, forHTTPHeaderField: header.name)
+        }
 
-        request.httpBody = try JSONEncoder().encode(payload(for: event, message: config.messageTemplate))
+        request.httpBody = try renderedBody(for: event, using: config)
 
         let (_, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else { return }
@@ -88,28 +94,23 @@ struct AccountabilityWebhookNotifier {
         }
     }
 
-    private func payload(for event: AccountabilityWebhookEvent, message: String) -> AccountabilityWebhookPayload {
-        AccountabilityWebhookPayload(
-            event: event.kind,
-            app: "WorkScreenTimeApp",
-            message: renderedMessage(from: message, for: event),
-            timestamp: event.timestamp.ISO8601Format(),
-            dateKey: event.dateKey,
-            windowID: event.windowID,
-            snoozeCount: event.snoozeCount,
-            dismissalReason: event.dismissalReason
-        )
+    private func renderedBody(for event: AccountabilityWebhookEvent, using config: AccountabilityWebhookConfig) throws -> Data {
+        let message = renderedMessage(from: config.messageTemplate, for: event)
+        var object: [String: String] = ["message": message]
+        let values = templateValues(for: event, message: message)
+        for field in config.bodyFields where field.isEnabled && !field.key.isEmpty {
+            object[field.key] = renderTemplate(field.value, values: values)
+        }
+
+        guard JSONSerialization.isValidJSONObject(object) else {
+            throw AccountabilityWebhookError.invalidBodyTemplate
+        }
+        return try JSONSerialization.data(withJSONObject: object)
     }
 
     private func renderedMessage(from template: String, for event: AccountabilityWebhookEvent) -> String {
         let reason = event.dismissalReason ?? ""
-        var rendered = template
-            .replacingOccurrences(of: "{{event}}", with: event.kind.rawValue)
-            .replacingOccurrences(of: "{{timestamp}}", with: event.timestamp.ISO8601Format())
-            .replacingOccurrences(of: "{{dateKey}}", with: event.dateKey)
-            .replacingOccurrences(of: "{{windowID}}", with: event.windowID ?? "")
-            .replacingOccurrences(of: "{{snoozeCount}}", with: event.snoozeCount.map(String.init) ?? "")
-            .replacingOccurrences(of: "{{reason}}", with: reason)
+        var rendered = renderTemplate(template, values: templateValues(for: event, message: reason))
 
         if event.kind == .dismissed, !reason.isEmpty, !template.contains("{{reason}}") {
             rendered += "\nReason: \(reason)"
@@ -117,15 +118,36 @@ struct AccountabilityWebhookNotifier {
 
         return rendered
     }
-}
 
-private struct AccountabilityWebhookPayload: Encodable {
-    var event: AccountabilityWebhookEventKind
-    var app: String
-    var message: String
-    var timestamp: String
-    var dateKey: String
-    var windowID: String?
-    var snoozeCount: Int?
-    var dismissalReason: String?
+    private func templateValues(for event: AccountabilityWebhookEvent, message: String) -> [String: String] {
+        [
+            "app": "WorkScreenTimeApp",
+            "event": event.kind.rawValue,
+            "message": message,
+            "timestamp": event.timestamp.ISO8601Format(),
+            "dateKey": event.dateKey,
+            "windowID": event.windowID ?? "",
+            "snoozeCount": event.snoozeCount.map(String.init) ?? "",
+            "reason": event.dismissalReason ?? "",
+            "dismissalReason": event.dismissalReason ?? ""
+        ]
+    }
+
+    private func renderTemplate(_ template: String, values: [String: String]) -> String {
+        guard let regex = try? NSRegularExpression(pattern: #"\{\{\s*([A-Za-z0-9_]+)\s*\}\}"#) else {
+            return template
+        }
+
+        let nsRange = NSRange(template.startIndex..<template.endIndex, in: template)
+        var rendered = template
+        for match in regex.matches(in: template, range: nsRange).reversed() {
+            guard let placeholderRange = Range(match.range(at: 1), in: template),
+                  let fullRange = Range(match.range, in: template),
+                  let value = values[String(template[placeholderRange])] else {
+                continue
+            }
+            rendered.replaceSubrange(fullRange, with: value)
+        }
+        return rendered
+    }
 }

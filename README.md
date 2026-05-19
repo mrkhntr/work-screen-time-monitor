@@ -226,23 +226,17 @@ The SwiftUI Settings window edits the same JSON config. You can also edit the JS
 
 ## Accountability Webhook
 
-Settings can send a `POST` request when a prompt is dismissed with a typed reason. The request is disabled by default and includes JSON shaped like:
+Settings can send a `POST` request when a prompt is dismissed with a typed reason. The request is disabled by default and always includes a `message` key rendered from the message template. You can add extra body keys in Settings; for a WhatsApp bridge, add:
 
 ```json
 {
-  "event": "dismissed",
-  "app": "WorkScreenTimeApp",
-  "message": "I dismissed Work Screen Time because: I need to finish the deploy",
-  "timestamp": "2026-05-15T21:42:00Z",
-  "dateKey": "2026-05-15",
-  "windowID": "friday-2026-05-15",
-  "snoozeCount": 3,
-  "dismissalReason": "I need to finish the deploy"
+  "groupId": "ad@g.us"
 }
 ```
 
-If a bearer token is configured, the app sends it as `Authorization: Bearer <token>`. If an API key is configured, the app sends it as `x-api-key: <key>`.
-The message template supports `{{reason}}`, `{{event}}`, `{{timestamp}}`, `{{dateKey}}`, `{{windowID}}`, and `{{snoozeCount}}`.
+The request always sends `Content-Type: application/json` and `Accept: application/json`. The Headers table can add enabled custom headers such as `x-api-key: <key>` or `Authorization: Bearer <token>`.
+
+The message template and extra body values support `{{message}}`, `{{reason}}`, `{{dismissalReason}}`, `{{event}}`, `{{timestamp}}`, `{{dateKey}}`, `{{windowID}}`, `{{snoozeCount}}`, and `{{app}}`. Unknown placeholders are shown as a warning in Settings and are left unchanged when sent.
 
 ## Escalation
 

@@ -220,25 +220,23 @@ struct SettingsView: View {
                                 .textFieldStyle(.roundedBorder)
                                 .frame(width: 420)
                         }
+                        rowDivider(columns: 2)
+                        GridRow {
+                            rowLabel("Test")
+                            Button {
+                                save()
+                                Task {
+                                    statusMessage = await model.sendTestAccountabilityWebhook()
+                                }
+                            } label: {
+                                Label("Send Test", systemImage: "paperplane.fill")
+                            }
+                        }
                     }
                 }
 
                 settingsPanel("Authentication") {
-                    Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 12) {
-                        GridRow {
-                            rowLabel("Bearer token")
-                            SecureField("Optional", text: webhookBinding(\.bearerToken))
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 420)
-                        }
-                        rowDivider(columns: 2)
-                        GridRow {
-                            rowLabel("API key")
-                            SecureField("Optional", text: webhookBinding(\.apiKey))
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 420)
-                        }
-                    }
+                    headersEditor
                     .disabled(!webhookIsEnabled)
                     .opacity(webhookIsEnabled ? 1 : 0.48)
                 }
@@ -247,20 +245,21 @@ struct SettingsView: View {
                     Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 12) {
                         GridRow {
                             rowLabel("Template")
-                            TextField("I dismissed Work Screen Time because: {{reason}}", text: webhookBinding(\.messageTemplate))
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 420)
+                            VStack(alignment: .leading, spacing: 6) {
+                                TextField("I dismissed Work Screen Time because: {{reason}}", text: webhookBinding(\.messageTemplate))
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 420)
+                                templateHelpText
+                                placeholderWarningText
+                            }
                         }
                         rowDivider(columns: 2)
                         GridRow {
-                            Text("")
-                            Button {
-                                save()
-                                Task {
-                                    statusMessage = await model.sendTestAccountabilityWebhook()
-                                }
-                            } label: {
-                                Label("Send Test", systemImage: "paperplane.fill")
+                            rowLabel("Extra keys")
+                            VStack(alignment: .leading, spacing: 6) {
+                                bodyFieldsEditor
+                                templateHelpText
+                                placeholderWarningText
                             }
                         }
                     }
@@ -362,6 +361,184 @@ struct SettingsView: View {
             .frame(width: 118, alignment: .trailing)
     }
 
+    private var templateHelpText: some View {
+        Text("Available: {{message}}, {{reason}}, {{event}}, {{timestamp}}, {{dateKey}}, {{windowID}}, {{snoozeCount}}, {{app}}")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: 420, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var placeholderWarningText: some View {
+        if !unknownWebhookPlaceholders.isEmpty {
+            Label(
+                "Unknown placeholders: \(unknownWebhookPlaceholders.map { "{{\($0)}}" }.joined(separator: ", "))",
+                systemImage: "exclamationmark.triangle"
+            )
+            .font(.caption)
+            .foregroundStyle(.orange)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: 420, alignment: .leading)
+        }
+    }
+
+    private var unknownWebhookPlaceholders: [String] {
+        let webhook = draft.accountabilityWebhook ?? AccountabilityWebhookConfig()
+        var foundPlaceholders = placeholders(in: webhook.messageTemplate)
+        for field in webhook.bodyFields {
+            foundPlaceholders.formUnion(placeholders(in: field.value))
+        }
+        return foundPlaceholders.subtracting(Self.allowedWebhookPlaceholders).sorted()
+    }
+
+    private static let allowedWebhookPlaceholders: Set<String> = [
+        "app",
+        "event",
+        "message",
+        "timestamp",
+        "dateKey",
+        "windowID",
+        "snoozeCount",
+        "reason",
+        "dismissalReason"
+    ]
+
+    private func placeholders(in template: String) -> Set<String> {
+        guard let regex = try? NSRegularExpression(pattern: #"\{\{\s*([A-Za-z0-9_]+)\s*\}\}"#) else {
+            return []
+        }
+        let range = NSRange(template.startIndex..<template.endIndex, in: template)
+        let matches = regex.matches(in: template, range: range)
+        return Set(matches.compactMap { match in
+            guard let placeholderRange = Range(match.range(at: 1), in: template) else { return nil }
+            return String(template[placeholderRange])
+        })
+    }
+
+    private var headersEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Menu {
+                    Button("x-api-key") {
+                        addWebhookHeader(name: "x-api-key")
+                    }
+                    Button("Authorization") {
+                        addWebhookHeader(name: "Authorization", value: "Bearer ")
+                    }
+                    Button("Content-Type") {
+                        addWebhookHeader(name: "Content-Type", value: "application/json")
+                    }
+                    Divider()
+                    Button("Blank Header") {
+                        addWebhookHeader()
+                    }
+                } label: {
+                    Label("Add Header", systemImage: "plus")
+                }
+            }
+
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("")
+                        .frame(width: 26)
+                    Text("Key")
+                        .frame(width: 150, alignment: .leading)
+                    Text("Value")
+                        .frame(width: 260, alignment: .leading)
+                    Spacer(minLength: 0)
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+                ForEach(webhookHeaders.wrappedValue.indices, id: \.self) { index in
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: webhookHeaders[index].isEnabled)
+                            .labelsHidden()
+                            .frame(width: 26)
+
+                        TextField("Header", text: webhookHeaders[index].name)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 150)
+
+                        SecureField("Value", text: webhookHeaders[index].value)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 260)
+
+                        Button {
+                            removeWebhookHeader(at: index)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
+    private var bodyFieldsEditor: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                addWebhookBodyField()
+            } label: {
+                Label("Add Body Key", systemImage: "plus")
+            }
+
+            VStack(spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("")
+                        .frame(width: 26)
+                    Text("Key")
+                        .frame(width: 150, alignment: .leading)
+                    Text("Value")
+                        .frame(width: 260, alignment: .leading)
+                    Spacer(minLength: 0)
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 26)
+                    Text("message")
+                        .frame(width: 150, alignment: .leading)
+                    Text("Rendered from Template")
+                        .foregroundStyle(.secondary)
+                        .frame(width: 260, alignment: .leading)
+                    Spacer(minLength: 0)
+                }
+                .font(.callout)
+
+                ForEach(webhookBodyFields.wrappedValue.indices, id: \.self) { index in
+                    HStack(spacing: 8) {
+                        Toggle("", isOn: webhookBodyFields[index].isEnabled)
+                            .labelsHidden()
+                            .frame(width: 26)
+
+                        TextField("groupId", text: webhookBodyFields[index].key)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 150)
+
+                        TextField("ad@g.us", text: webhookBodyFields[index].value)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 260)
+
+                        Button {
+                            removeWebhookBodyField(at: index)
+                        } label: {
+                            Image(systemName: "minus.circle")
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+
     private func rowDivider(columns: Int) -> some View {
         Divider()
             .gridCellColumns(columns)
@@ -419,6 +596,58 @@ struct SettingsView: View {
                 draft.accountabilityWebhook = webhook
             }
         )
+    }
+
+    private var webhookHeaders: Binding<[AccountabilityWebhookHeader]> {
+        Binding(
+            get: {
+                draft.accountabilityWebhook?.headers ?? []
+            },
+            set: { newValue in
+                var webhook = draft.accountabilityWebhook ?? AccountabilityWebhookConfig()
+                webhook.headers = newValue
+                draft.accountabilityWebhook = webhook
+            }
+        )
+    }
+
+    private var webhookBodyFields: Binding<[AccountabilityWebhookBodyField]> {
+        Binding(
+            get: {
+                draft.accountabilityWebhook?.bodyFields ?? []
+            },
+            set: { newValue in
+                var webhook = draft.accountabilityWebhook ?? AccountabilityWebhookConfig()
+                webhook.bodyFields = newValue
+                draft.accountabilityWebhook = webhook
+            }
+        )
+    }
+
+    private func addWebhookHeader(name: String = "", value: String = "") {
+        var headers = webhookHeaders.wrappedValue
+        headers.append(AccountabilityWebhookHeader(name: name, value: value))
+        webhookHeaders.wrappedValue = headers
+    }
+
+    private func removeWebhookHeader(at index: Int) {
+        var headers = webhookHeaders.wrappedValue
+        guard headers.indices.contains(index) else { return }
+        headers.remove(at: index)
+        webhookHeaders.wrappedValue = headers
+    }
+
+    private func addWebhookBodyField(key: String = "", value: String = "") {
+        var fields = webhookBodyFields.wrappedValue
+        fields.append(AccountabilityWebhookBodyField(key: key, value: value))
+        webhookBodyFields.wrappedValue = fields
+    }
+
+    private func removeWebhookBodyField(at index: Int) {
+        var fields = webhookBodyFields.wrappedValue
+        guard fields.indices.contains(index) else { return }
+        fields.remove(at: index)
+        webhookBodyFields.wrappedValue = fields
     }
 
     private func resetDraft() {

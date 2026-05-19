@@ -55,7 +55,15 @@ final class ConfigStoreTests: XCTestCase {
             endpointURLString: "  https://example.com/hook  ",
             bearerToken: "  token  ",
             apiKey: "  api-key  ",
-            messageTemplate: "   "
+            headers: [
+                AccountabilityWebhookHeader(name: " x-api-key ", value: " custom-key "),
+                AccountabilityWebhookHeader(name: " ", value: " ")
+            ],
+            messageTemplate: "   ",
+            bodyFields: [
+                AccountabilityWebhookBodyField(key: " groupId ", value: " ad@g.us "),
+                AccountabilityWebhookBodyField(key: " ", value: " ")
+            ]
         )
 
         try store.save(config)
@@ -65,7 +73,74 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(loaded.accountabilityWebhook?.endpointURLString, "https://example.com/hook")
         XCTAssertEqual(loaded.accountabilityWebhook?.bearerToken, "token")
         XCTAssertEqual(loaded.accountabilityWebhook?.apiKey, "api-key")
+        XCTAssertEqual(loaded.accountabilityWebhook?.headers.count, 1)
+        XCTAssertEqual(loaded.accountabilityWebhook?.headers.first?.name, "x-api-key")
+        XCTAssertEqual(loaded.accountabilityWebhook?.headers.first?.value, "custom-key")
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields.count, 1)
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields.first?.key, "groupId")
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields.first?.value, "ad@g.us")
         XCTAssertEqual(loaded.accountabilityWebhook?.messageTemplate, AccountabilityWebhookConfig().messageTemplate)
+    }
+
+    func testLoadSupportsLegacyAccountabilityWebhookMissingNewFields() throws {
+        let json = """
+        {
+          "schedules": [],
+          "warningLeadMinutes": 15,
+          "snoozeMinutes": 15,
+          "idleThresholdMinutes": 1,
+          "quotes": ["Close up."],
+          "escalation": {
+            "holdRequiredAtSnoozeCount": 2,
+            "phraseRequiredAtSnoozeCount": 3,
+            "reasonRequiredAtSnoozeCount": 3,
+            "confirmationPhrase": "I am done for today"
+          },
+          "accountabilityWebhook": {
+            "isEnabled": true,
+            "endpointURLString": "https://example.com/hook",
+            "messageTemplate": "Reason: {{reason}}"
+          }
+        }
+        """
+        try Data(json.utf8).write(to: store.url)
+
+        let loaded = store.load()
+
+        XCTAssertEqual(loaded.accountabilityWebhook?.headers, [])
+        XCTAssertEqual(loaded.accountabilityWebhook?.apiKey, "")
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields, [])
+    }
+
+    func testLoadMigratesLegacyBodyTemplateToBodyFields() throws {
+        let json = """
+        {
+          "schedules": [],
+          "warningLeadMinutes": 15,
+          "snoozeMinutes": 15,
+          "idleThresholdMinutes": 1,
+          "quotes": ["Close up."],
+          "escalation": {
+            "holdRequiredAtSnoozeCount": 2,
+            "phraseRequiredAtSnoozeCount": 3,
+            "reasonRequiredAtSnoozeCount": 3,
+            "confirmationPhrase": "I am done for today"
+          },
+          "accountabilityWebhook": {
+            "isEnabled": true,
+            "endpointURLString": "https://example.com/hook",
+            "messageTemplate": "Reason: {{reason}}",
+            "bodyTemplate": "{ \\"groupId\\": \\"ad@g.us\\", \\"message\\": \\"{{message}}\\" }"
+          }
+        }
+        """
+        try Data(json.utf8).write(to: store.url)
+
+        let loaded = store.load()
+
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields.count, 1)
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields.first?.key, "groupId")
+        XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields.first?.value, "ad@g.us")
     }
 
     func testSaveDisablesAccountabilityWebhookWithoutURL() throws {

@@ -106,6 +106,18 @@ public final class ConfigStore {
         copy.endpointURLString = copy.endpointURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.bearerToken = copy.bearerToken.trimmingCharacters(in: .whitespacesAndNewlines)
         copy.apiKey = copy.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        copy.headers = copy.headers.compactMap { header in
+            var header = header
+            header.name = header.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            header.value = header.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return header.name.isEmpty && header.value.isEmpty ? nil : header
+        }
+        copy.bodyFields = copy.bodyFields.compactMap { field in
+            var field = field
+            field.key = field.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            field.value = field.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return field.key.isEmpty && field.value.isEmpty ? nil : field
+        }
         copy.messageTemplate = copy.messageTemplate.trimmingCharacters(in: .whitespacesAndNewlines)
         if copy.messageTemplate.isEmpty {
             copy.messageTemplate = AccountabilityWebhookConfig().messageTemplate

@@ -107,25 +107,112 @@ public struct EscalationConfig: Codable, Equatable, Sendable {
     }
 }
 
+public struct AccountabilityWebhookHeader: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var isEnabled: Bool
+    public var name: String
+    public var value: String
+
+    public init(
+        id: UUID = UUID(),
+        isEnabled: Bool = true,
+        name: String = "",
+        value: String = ""
+    ) {
+        self.id = id
+        self.isEnabled = isEnabled
+        self.name = name
+        self.value = value
+    }
+}
+
+public struct AccountabilityWebhookBodyField: Codable, Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var isEnabled: Bool
+    public var key: String
+    public var value: String
+
+    public init(
+        id: UUID = UUID(),
+        isEnabled: Bool = true,
+        key: String = "",
+        value: String = ""
+    ) {
+        self.id = id
+        self.isEnabled = isEnabled
+        self.key = key
+        self.value = value
+    }
+}
+
 public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
     public var isEnabled: Bool
     public var endpointURLString: String
     public var bearerToken: String
     public var apiKey: String
+    public var headers: [AccountabilityWebhookHeader]
     public var messageTemplate: String
+    public var bodyFields: [AccountabilityWebhookBodyField]
 
     public init(
         isEnabled: Bool = false,
         endpointURLString: String = "",
         bearerToken: String = "",
         apiKey: String = "",
-        messageTemplate: String = "I dismissed Work Screen Time because: {{reason}}"
+        headers: [AccountabilityWebhookHeader] = [],
+        messageTemplate: String = "I dismissed Work Screen Time because: {{reason}}",
+        bodyFields: [AccountabilityWebhookBodyField] = []
     ) {
         self.isEnabled = isEnabled
         self.endpointURLString = endpointURLString
         self.bearerToken = bearerToken
         self.apiKey = apiKey
+        self.headers = headers
         self.messageTemplate = messageTemplate
+        self.bodyFields = bodyFields
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case isEnabled
+        case endpointURLString
+        case bearerToken
+        case apiKey
+        case headers
+        case messageTemplate
+        case bodyFields
+    }
+
+    private enum LegacyCodingKeys: String, CodingKey {
+        case bodyTemplate
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+        let bodyFields = try container.decodeIfPresent([AccountabilityWebhookBodyField].self, forKey: .bodyFields)
+            ?? Self.bodyFields(fromLegacyTemplate: legacyContainer.decodeIfPresent(String.self, forKey: .bodyTemplate))
+        self.init(
+            isEnabled: try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false,
+            endpointURLString: try container.decodeIfPresent(String.self, forKey: .endpointURLString) ?? "",
+            bearerToken: try container.decodeIfPresent(String.self, forKey: .bearerToken) ?? "",
+            apiKey: try container.decodeIfPresent(String.self, forKey: .apiKey) ?? "",
+            headers: try container.decodeIfPresent([AccountabilityWebhookHeader].self, forKey: .headers) ?? [],
+            messageTemplate: try container.decodeIfPresent(String.self, forKey: .messageTemplate) ?? Self().messageTemplate,
+            bodyFields: bodyFields
+        )
+    }
+
+    private static func bodyFields(fromLegacyTemplate template: String?) -> [AccountabilityWebhookBodyField] {
+        guard let template,
+              let data = template.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
+        }
+
+        return object.compactMap { key, value in
+            guard key != "message", let stringValue = value as? String else { return nil }
+            return AccountabilityWebhookBodyField(key: key, value: stringValue)
+        }
     }
 }
 
