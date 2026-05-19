@@ -201,12 +201,12 @@ final class AppModel: ObservableObject {
         notificationManager.sendTest()
     }
 
-    func sendTestAccountabilityWebhook() async -> String {
+    func sendTestAccountabilityWebhook() async -> (isSuccess: Bool, message: String) {
         do {
             try await accountabilityWebhookNotifier.sendTest(using: config.accountabilityWebhook)
-            return "Test webhook sent."
+            return (true, "Test webhook sent.")
         } catch {
-            return error.localizedDescription
+            return (false, error.localizedDescription)
         }
     }
 

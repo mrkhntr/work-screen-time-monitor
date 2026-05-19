@@ -32,12 +32,21 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     }
 }
 
+private enum WebhookTestState: Equatable {
+    case idle
+    case sending
+    case succeeded
+    case failed
+}
+
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @State private var draft: AppConfig
     @State private var quotesText: String
     @State private var statusMessage = ""
     @State private var selectedPage: SettingsPage? = .schedule
+    @State private var webhookTestState: WebhookTestState = .idle
+    @State private var webhookTestMessage = ""
 
     init(model: AppModel) {
         self.model = model
@@ -223,13 +232,25 @@ struct SettingsView: View {
                         rowDivider(columns: 2)
                         GridRow {
                             rowLabel("Test")
-                            Button {
-                                save()
-                                Task {
-                                    statusMessage = await model.sendTestAccountabilityWebhook()
+                            VStack(alignment: .leading, spacing: 6) {
+                                Button {
+                                    Task {
+                                        await sendTestWebhook()
+                                    }
+                                } label: {
+                                    webhookTestButtonLabel
                                 }
-                            } label: {
-                                Label("Send Test", systemImage: "paperplane.fill")
+                                .buttonStyle(.borderedProminent)
+                                .tint(webhookTestTint)
+                                .disabled(webhookTestState == .sending)
+
+                                if !webhookTestMessage.isEmpty {
+                                    Label(webhookTestMessage, systemImage: webhookTestState == .failed ? "xmark.circle.fill" : "checkmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(webhookTestState == .failed ? .red : .green)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                        .frame(width: 420, alignment: .leading)
+                                }
                             }
                         }
                     }
@@ -382,6 +403,35 @@ struct SettingsView: View {
             .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: 420, alignment: .leading)
+        }
+    }
+
+    @ViewBuilder
+    private var webhookTestButtonLabel: some View {
+        switch webhookTestState {
+        case .idle:
+            Label("Send Test", systemImage: "paperplane.fill")
+        case .sending:
+            HStack(spacing: 7) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Sending")
+            }
+        case .succeeded:
+            Label("Sent", systemImage: "checkmark.circle.fill")
+        case .failed:
+            Label("Failed", systemImage: "xmark.circle.fill")
+        }
+    }
+
+    private var webhookTestTint: Color {
+        switch webhookTestState {
+        case .idle, .sending:
+            .accentColor
+        case .succeeded:
+            .green
+        case .failed:
+            .red
         }
     }
 
@@ -579,10 +629,24 @@ struct SettingsView: View {
         .frame(width: 112)
     }
 
-    private func save() {
+    private func save(showStatus: Bool = true) {
         draft.quotes = pendingQuotes
         model.saveConfig(draft)
-        statusMessage = "Saved."
+        if showStatus {
+            statusMessage = "Saved."
+        }
+    }
+
+    private func sendTestWebhook() async {
+        guard webhookTestState != .sending else { return }
+        save(showStatus: false)
+        statusMessage = ""
+        webhookTestState = .sending
+        webhookTestMessage = ""
+
+        let result = await model.sendTestAccountabilityWebhook()
+        webhookTestState = result.isSuccess ? .succeeded : .failed
+        webhookTestMessage = result.message
     }
 
     private func webhookBinding<Value>(_ keyPath: WritableKeyPath<AccountabilityWebhookConfig, Value>) -> Binding<Value> {
