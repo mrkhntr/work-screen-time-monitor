@@ -3,6 +3,7 @@ import WorkScreenTimeCore
 
 enum AccountabilityWebhookEventKind: String, Codable, Sendable {
     case dismissed
+    case snoozed
     case test
 }
 
@@ -112,7 +113,7 @@ struct AccountabilityWebhookNotifier {
         let reason = event.dismissalReason ?? ""
         var rendered = renderTemplate(template, values: templateValues(for: event, message: reason))
 
-        if event.kind == .dismissed, !reason.isEmpty, !template.contains("{{reason}}") {
+        if event.kind != .test, !reason.isEmpty, !template.contains("{{reason}}") {
             rendered += "\nReason: \(reason)"
         }
 

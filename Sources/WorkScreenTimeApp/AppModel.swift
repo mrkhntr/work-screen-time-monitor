@@ -314,7 +314,7 @@ final class AppModel: ObservableObject {
             dateKey: dateKey,
             config: config,
             escalation: escalation,
-            onSnooze: { [weak self] c in self?.snooze(from: c) },
+            onSnooze: { [weak self] c, reason in self?.snooze(from: c, reason: reason) },
             onDismiss: { [weak self] c, reason in self?.dismiss(from: c, reason: reason) }
         )
         appState = .prompting(controller: controller, shownAt: now)
@@ -335,10 +335,21 @@ final class AppModel: ObservableObject {
         )
     }
 
-    private func snooze(from controller: PromptWindowController) {
+    private func snooze(from controller: PromptWindowController, reason: String?) {
         let now = Date()
         let until = now.addingTimeInterval(TimeInterval(config.snoozeMinutes * 60))
         try? historyStore.recordSnooze(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, until: until, at: now)
+        if let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
+            let snoozeCount = historyStore.summary(for: controller.dateKey).snoozes
+            sendAccountabilityWebhook(
+                kind: .snoozed,
+                timestamp: now,
+                dateKey: controller.dateKey,
+                windowID: controller.downtimeWindow.id,
+                snoozeCount: snoozeCount,
+                dismissalReason: reason
+            )
+        }
         notificationManager.notifySnoozed(until: until)
         controller.closeAll()
         appState = .snoozed(until: until)

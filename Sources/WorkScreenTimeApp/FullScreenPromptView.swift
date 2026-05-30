@@ -7,7 +7,7 @@ struct FullScreenPromptView: View {
 
     let config: AppConfig
     let escalation: EscalationState
-    let onSnooze: () -> Void
+    let onSnooze: (String?) -> Void
     let onDismiss: (String?) -> Void
     @ObservedObject var formState: PromptFormState
 
@@ -129,7 +129,7 @@ struct FullScreenPromptView: View {
         formState.attemptedAction = true
         guard canDismiss else { return }
         switch formState.selectedAction {
-        case .snooze: onSnooze()
+        case .snooze: onSnooze(reasonText.isEmpty ? nil : reasonText)
         case .dismiss: onDismiss(reasonText.isEmpty ? nil : reasonText)
         }
     }

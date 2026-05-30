@@ -9,7 +9,7 @@ final class PromptWindowController {
 
     private let config: AppConfig
     private let escalation: EscalationState
-    private let onSnooze: (PromptWindowController) -> Void
+    private let onSnooze: (PromptWindowController, String?) -> Void
     private let onDismiss: (PromptWindowController, String?) -> Void
     private let formState = PromptFormState()
     private var windows: [NSWindow] = []
@@ -22,7 +22,7 @@ final class PromptWindowController {
         dateKey: String,
         config: AppConfig,
         escalation: EscalationState,
-        onSnooze: @escaping (PromptWindowController) -> Void,
+        onSnooze: @escaping (PromptWindowController, String?) -> Void,
         onDismiss: @escaping (PromptWindowController, String?) -> Void
     ) {
         self.downtimeWindow = window
@@ -50,10 +50,10 @@ final class PromptWindowController {
         windows.removeAll()
     }
 
-    private func finishSnooze() {
+    private func finishSnooze(reason: String?) {
         guard !didFinish else { return }
         didFinish = true
-        onSnooze(self)
+        onSnooze(self, reason)
     }
 
     private func finishDismiss(reason: String?) {
@@ -109,7 +109,7 @@ final class PromptWindowController {
         let view = FullScreenPromptView(
             config: config,
             escalation: escalation,
-            onSnooze: { [weak self] in self?.finishSnooze() },
+            onSnooze: { [weak self] reason in self?.finishSnooze(reason: reason) },
             onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) },
             formState: formState
         )
