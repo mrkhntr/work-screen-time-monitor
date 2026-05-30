@@ -339,17 +339,7 @@ final class AppModel: ObservableObject {
         let now = Date()
         let until = now.addingTimeInterval(TimeInterval(config.snoozeMinutes * 60))
         try? historyStore.recordSnooze(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, until: until, at: now)
-        if let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
-            let snoozeCount = historyStore.summary(for: controller.dateKey).snoozes
-            sendAccountabilityWebhook(
-                kind: .snoozed,
-                timestamp: now,
-                dateKey: controller.dateKey,
-                windowID: controller.downtimeWindow.id,
-                snoozeCount: snoozeCount,
-                dismissalReason: reason
-            )
-        }
+        reportBoundaryCrossing(kind: .snoozed, controller: controller, reason: reason, at: now)
         notificationManager.notifySnoozed(until: until)
         controller.closeAll()
         appState = .snoozed(until: until)
@@ -359,20 +349,28 @@ final class AppModel: ObservableObject {
     private func dismiss(from controller: PromptWindowController, reason: String?) {
         let now = Date()
         try? historyStore.recordDismissal(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, reason: reason, at: now)
-        if let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty {
-            let snoozeCount = historyStore.summary(for: controller.dateKey).snoozes
-            sendAccountabilityWebhook(
-                kind: .dismissed,
-                timestamp: now,
-                dateKey: controller.dateKey,
-                windowID: controller.downtimeWindow.id,
-                snoozeCount: snoozeCount,
-                dismissalReason: reason
-            )
-        }
+        reportBoundaryCrossing(kind: .dismissed, controller: controller, reason: reason, at: now)
         controller.closeAll()
         appState = .idle
         refreshStatus(now: now)
+    }
+
+    /// Fires the accountability webhook for a boundary crossing (snooze or dismiss) when the user supplied a reason.
+    private func reportBoundaryCrossing(
+        kind: AccountabilityWebhookEventKind,
+        controller: PromptWindowController,
+        reason: String?,
+        at now: Date
+    ) {
+        guard let reason = reason?.trimmingCharacters(in: .whitespacesAndNewlines), !reason.isEmpty else { return }
+        sendAccountabilityWebhook(
+            kind: kind,
+            timestamp: now,
+            dateKey: controller.dateKey,
+            windowID: controller.downtimeWindow.id,
+            snoozeCount: historyStore.summary(for: controller.dateKey).snoozes,
+            dismissalReason: reason
+        )
     }
 
     private func sendAccountabilityWebhook(

@@ -160,7 +160,7 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
         bearerToken: String = "",
         apiKey: String = "",
         headers: [AccountabilityWebhookHeader] = [],
-        messageTemplate: String = "I dismissed Work Screen Time because: {{reason}}",
+        messageTemplate: String = "I {{event}} Work Screen Time because: {{reason}}",
         bodyFields: [AccountabilityWebhookBodyField] = []
     ) {
         self.isEnabled = isEnabled

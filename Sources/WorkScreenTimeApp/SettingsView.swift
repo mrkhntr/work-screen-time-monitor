@@ -267,7 +267,7 @@ struct SettingsView: View {
                         GridRow {
                             rowLabel("Template")
                             VStack(alignment: .leading, spacing: 6) {
-                                TextField("I dismissed Work Screen Time because: {{reason}}", text: webhookBinding(\.messageTemplate))
+                                TextField("I {{event}} Work Screen Time because: {{reason}}", text: webhookBinding(\.messageTemplate))
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 420)
                                 templateHelpText

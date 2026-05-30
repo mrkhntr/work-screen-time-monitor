@@ -113,7 +113,8 @@ struct AccountabilityWebhookNotifier {
         let reason = event.dismissalReason ?? ""
         var rendered = renderTemplate(template, values: templateValues(for: event, message: reason))
 
-        if event.kind != .test, !reason.isEmpty, !template.contains("{{reason}}") {
+        let appendsReason = event.kind == .dismissed || event.kind == .snoozed
+        if appendsReason, !reason.isEmpty, !template.contains("{{reason}}") {
             rendered += "\nReason: \(reason)"
         }
 
