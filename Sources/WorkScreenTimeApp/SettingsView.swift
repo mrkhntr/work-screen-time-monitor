@@ -219,7 +219,7 @@ struct SettingsView: View {
                     Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 12) {
                         GridRow {
                             rowLabel("Trigger")
-                            Toggle("Dismissals with reasons", isOn: webhookBinding(\.isEnabled))
+                            Toggle("Dismissals & repeated snoozes", isOn: webhookBinding(\.isEnabled))
                                 .toggleStyle(.switch)
                         }
                         rowDivider(columns: 2)

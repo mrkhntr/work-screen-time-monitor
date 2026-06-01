@@ -226,7 +226,26 @@ The SwiftUI Settings window edits the same JSON config. You can also edit the JS
 
 ## Accountability Webhook
 
-Settings can send a `POST` request when a prompt is dismissed with a typed reason. The request is disabled by default and always includes a `message` key rendered from the message template. You can add extra body keys in Settings; for a WhatsApp bridge, add:
+Settings can send a `POST` request to notify an accountability contact when you cross a downtime boundary. The request is disabled by default. When enabled, it fires:
+
+- on **every dismiss** you make from the prompt, and
+- on a **snooze** once that day's total snooze count reaches `snoozeNotifyThreshold` (default `3`, i.e. the 3rd snooze onward).
+
+The full-screen prompt shows a yellow warning when the currently selected action (snooze or dismiss) will notify your contact, so there are no surprises. A typed reason is optional and is included when present; when a dismiss has no reason, `{{reason}}`/`{{dismissalReason}}` render as `<No Reason Given>`. A prompt that auto-expires after an hour records a local dismissal but does **not** send a message.
+
+The snooze threshold is configured directly in the JSON (there is no Settings field for it). Edit `config.json` while the app is quit:
+
+```json
+{
+  "accountabilityWebhook": {
+    "isEnabled": true,
+    "endpointURLString": "https://example.com/hook",
+    "snoozeNotifyThreshold": 3
+  }
+}
+```
+
+The request always includes a `message` key rendered from the message template. You can add extra body keys in Settings; for a WhatsApp bridge, add:
 
 ```json
 {

@@ -153,6 +153,7 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
     public var headers: [AccountabilityWebhookHeader]
     public var messageTemplate: String
     public var bodyFields: [AccountabilityWebhookBodyField]
+    public var snoozeNotifyThreshold: Int
 
     public init(
         isEnabled: Bool = false,
@@ -161,7 +162,8 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
         apiKey: String = "",
         headers: [AccountabilityWebhookHeader] = [],
         messageTemplate: String = "I {{event}} Work Screen Time because: {{reason}}",
-        bodyFields: [AccountabilityWebhookBodyField] = []
+        bodyFields: [AccountabilityWebhookBodyField] = [],
+        snoozeNotifyThreshold: Int = AccountabilityTrigger.defaultSnoozeNotifyThreshold
     ) {
         self.isEnabled = isEnabled
         self.endpointURLString = endpointURLString
@@ -170,6 +172,7 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
         self.headers = headers
         self.messageTemplate = messageTemplate
         self.bodyFields = bodyFields
+        self.snoozeNotifyThreshold = snoozeNotifyThreshold
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -180,6 +183,7 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
         case headers
         case messageTemplate
         case bodyFields
+        case snoozeNotifyThreshold
     }
 
     private enum LegacyCodingKeys: String, CodingKey {
@@ -198,7 +202,9 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
             apiKey: try container.decodeIfPresent(String.self, forKey: .apiKey) ?? "",
             headers: try container.decodeIfPresent([AccountabilityWebhookHeader].self, forKey: .headers) ?? [],
             messageTemplate: try container.decodeIfPresent(String.self, forKey: .messageTemplate) ?? Self().messageTemplate,
-            bodyFields: bodyFields
+            bodyFields: bodyFields,
+            snoozeNotifyThreshold: try container.decodeIfPresent(Int.self, forKey: .snoozeNotifyThreshold)
+                ?? AccountabilityTrigger.defaultSnoozeNotifyThreshold
         )
     }
 

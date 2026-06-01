@@ -110,6 +110,24 @@ final class ConfigStoreTests: XCTestCase {
         XCTAssertEqual(loaded.accountabilityWebhook?.headers, [])
         XCTAssertEqual(loaded.accountabilityWebhook?.apiKey, "")
         XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields, [])
+        XCTAssertEqual(
+            loaded.accountabilityWebhook?.snoozeNotifyThreshold,
+            AccountabilityTrigger.defaultSnoozeNotifyThreshold
+        )
+    }
+
+    func testSnoozeNotifyThresholdPersistsAcrossSaveAndLoad() throws {
+        var config = AppConfig.default
+        config.accountabilityWebhook = AccountabilityWebhookConfig(
+            isEnabled: true,
+            endpointURLString: "https://example.com/hook",
+            snoozeNotifyThreshold: 2
+        )
+
+        try store.save(config)
+        let loaded = store.load()
+
+        XCTAssertEqual(loaded.accountabilityWebhook?.snoozeNotifyThreshold, 2)
     }
 
     func testLoadMigratesLegacyBodyTemplateToBodyFields() throws {

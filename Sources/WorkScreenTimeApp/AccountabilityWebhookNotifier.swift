@@ -121,8 +121,12 @@ struct AccountabilityWebhookNotifier {
         return rendered
     }
 
+    private static let missingReasonPlaceholder = "<No Reason Given>"
+
     private func templateValues(for event: AccountabilityWebhookEvent, message: String) -> [String: String] {
-        [
+        let displayReason = event.dismissalReason?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .nonEmpty ?? Self.missingReasonPlaceholder
+        return [
             "app": "WorkScreenTimeApp",
             "event": event.kind.rawValue,
             "message": message,
@@ -130,8 +134,8 @@ struct AccountabilityWebhookNotifier {
             "dateKey": event.dateKey,
             "windowID": event.windowID ?? "",
             "snoozeCount": event.snoozeCount.map(String.init) ?? "",
-            "reason": event.dismissalReason ?? "",
-            "dismissalReason": event.dismissalReason ?? ""
+            "reason": displayReason,
+            "dismissalReason": displayReason
         ]
     }
 
@@ -152,4 +156,8 @@ struct AccountabilityWebhookNotifier {
         }
         return rendered
     }
+}
+
+private extension String {
+    var nonEmpty: String? { isEmpty ? nil : self }
 }

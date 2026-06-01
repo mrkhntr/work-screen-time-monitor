@@ -38,6 +38,26 @@ struct FullScreenPromptView: View {
     private var canDismiss: Bool { requirements.allSatisfy(\.isComplete) }
     private var validationMessages: [String] { requirements.filter { !$0.isComplete }.map(\.message) }
 
+    private var webhookEnabled: Bool { config.accountabilityWebhook?.isEnabled == true }
+
+    private var willNotify: Bool {
+        guard webhookEnabled else { return false }
+        switch formState.selectedAction {
+        case .dismiss:
+            return true
+        case .snooze:
+            let threshold = config.accountabilityWebhook?.snoozeNotifyThreshold
+                ?? AccountabilityTrigger.defaultSnoozeNotifyThreshold
+            return AccountabilityTrigger.notifiesOnSnooze(totalSnoozesAfter: escalation.snoozeCount + 1, threshold: threshold)
+        }
+    }
+
+    private var notifyWarning: String {
+        formState.selectedAction == .dismiss
+            ? "Dismissing will notify your accountability contact."
+            : "Snoozing again will notify your accountability contact."
+    }
+
     var body: some View {
         ZStack {
             Color(red: 0.08, green: 0.08, blue: 0.085)
@@ -97,6 +117,14 @@ struct FullScreenPromptView: View {
                             }
                     }
                     .frame(width: 420)
+                }
+
+                if willNotify {
+                    Text(notifyWarning)
+                        .font(.callout.weight(.semibold))
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.yellow)
+                        .frame(maxWidth: 620)
                 }
 
                 Color.clear
