@@ -15,14 +15,15 @@ function DownloadHero() {
         <p className={styles.kicker}>macOS menu bar app</p>
         <h1>Work Screen Time</h1>
         <p className={styles.lede}>
-          A small app that notices when you are working past the boundary you
-          set, then puts a full-screen reminder between you and one more task.
+          A small app that blocks your work apps and puts a full-screen reminder
+          between you and one more task during the downtime windows you set — with
+          snooze escalation and an optional accountability webhook.
         </p>
         <div className={styles.actions}>
           <Link className={styles.primaryButton} href={downloadUrl}>
             Download for Mac
           </Link>
-          <span className={styles.version}>Version {appVersion}</span>
+          <span className={styles.version}>Version {appVersion} · Android coming soon</span>
         </div>
       </section>
 
