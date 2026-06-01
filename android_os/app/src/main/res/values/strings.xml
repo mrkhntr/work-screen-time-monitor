@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Work Screen Time</string>
+    <string name="accessibility_description">Detects which app is in the foreground so Work Screen Time can block your chosen apps during your downtime windows. No screen content is read.</string>
+</resources>
