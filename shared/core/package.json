@@ -1,0 +1,20 @@
+{
+  "name": "@work-screen-time/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared pure logic core (the brain) for the Work Screen Time macOS + Android apps.",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build": "esbuild src/index.ts --bundle --format=iife --target=es2020 --platform=neutral --outfile=dist/core.js"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
