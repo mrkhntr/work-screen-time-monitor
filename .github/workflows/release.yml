@@ -55,7 +55,7 @@ jobs:
         run: npm ci
 
       - name: Test
-        run: swift test
+        run: swift test --package-path mac_os
 
       - name: Build app dmg
         shell: bash
@@ -63,7 +63,7 @@ jobs:
           set -euo pipefail
           brew install create-dmg
           DMG_PATH="$RUNNER_TEMP/${{ steps.version.outputs.dmg_name }}"
-          scripts/build_app.sh \
+          mac_os/scripts/build_app.sh \
             --version "${{ steps.version.outputs.version }}" \
             --build "${{ steps.version.outputs.build }}" \
             --dmg "$DMG_PATH"
@@ -114,19 +114,19 @@ jobs:
           # Generate clean HTML release notes for Sparkle
           mkdir -p website/static/release-notes
           NOTES_FILENAME="release-notes-${{ steps.version.outputs.version }}.html"
-          scripts/generate_sparkle_notes.sh "${{ steps.version.outputs.version }}" "$GITHUB_REF_NAME" "website/static/release-notes/$NOTES_FILENAME"
+          mac_os/scripts/generate_sparkle_notes.sh "${{ steps.version.outputs.version }}" "$GITHUB_REF_NAME" "website/static/release-notes/$NOTES_FILENAME"
           
           # Pass the hosted HTML URL to Sparkle appcast
           RELEASE_NOTES_URL="https://mrkhntr.com/work-screen-time-monitor/release-notes/$NOTES_FILENAME"
           
-          scripts/create_appcast.sh \
+          mac_os/scripts/create_appcast.sh \
             --version "${{ steps.version.outputs.version }}" \
             --build "${{ steps.version.outputs.build }}" \
             --dmg "$DMG_PATH" \
             --download-url "$DOWNLOAD_URL" \
             --release-notes-url "$RELEASE_NOTES_URL" \
             --output "$RUNNER_TEMP/appcast.xml" \
-            --sign-update ".build/artifacts/sparkle/Sparkle/bin/sign_update"
+            --sign-update "mac_os/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 
       - name: Build Docusaurus download site
         working-directory: website
