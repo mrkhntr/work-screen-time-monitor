@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import SwiftUI
+import UniformTypeIdentifiers
 import WorkScreenTimeCore
 
 private enum SettingsPage: String, CaseIterable, Identifiable {
@@ -7,6 +9,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
     case timing
     case messages
     case accountability
+    case blocking
     case maintenance
 
     var id: String { rawValue }
@@ -17,6 +20,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         case .timing: "Timing"
         case .messages: "Messages"
         case .accountability: "Accountability"
+        case .blocking: "Blocking"
         case .maintenance: "Maintenance"
         }
     }
@@ -27,6 +31,7 @@ private enum SettingsPage: String, CaseIterable, Identifiable {
         case .timing: "timer"
         case .messages: "text.quote"
         case .accountability: "paperplane"
+        case .blocking: "hand.raised"
         case .maintenance: "wrench.and.screwdriver"
         }
     }
@@ -287,6 +292,64 @@ struct SettingsView: View {
                     .disabled(!webhookIsEnabled)
                     .opacity(webhookIsEnabled ? 1 : 0.48)
                 }
+            }
+
+        case .blocking:
+            VStack(spacing: 14) {
+                settingsPanel("App Blocking") {
+                    Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 12) {
+                        GridRow {
+                            rowLabel("Enable")
+                            Toggle("Block apps during downtime", isOn: blockingBinding(\.isEnabled))
+                                .toggleStyle(.switch)
+                        }
+                        rowDivider(columns: 2)
+                        GridRow {
+                            rowLabel("Scope")
+                            Toggle("Block every app, not just the list below", isOn: blockingBinding(\.blockAllApps))
+                        }
+                    }
+                }
+
+                settingsPanel("Blocked Apps") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        let apps = draft.appBlocking?.blockedApps ?? []
+                        if apps.isEmpty {
+                            Text("No apps added yet. Add the apps you want walled off during downtime.")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(apps.indices, id: \.self) { index in
+                            HStack(spacing: 10) {
+                                Toggle("", isOn: blockedAppEnabledBinding(index))
+                                    .labelsHidden()
+                                Text(apps[index].displayName.isEmpty ? apps[index].identifier : apps[index].displayName)
+                                Text(apps[index].identifier)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Button(role: .destructive) {
+                                    removeBlockedApp(at: index)
+                                } label: {
+                                    Image(systemName: "trash")
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                        Button {
+                            addBlockedApps()
+                        } label: {
+                            Label("Add app…", systemImage: "plus")
+                        }
+                    }
+                    .disabled(!(draft.appBlocking?.isEnabled ?? false))
+                    .opacity((draft.appBlocking?.isEnabled ?? false) ? 1 : 0.48)
+                }
+
+                Text("Opening a blocked app during downtime shows the full-screen prompt. macOS blocking is overlay-only — no apps are force-quit — so it needs no extra permission.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
         case .maintenance:
@@ -635,6 +698,59 @@ struct SettingsView: View {
         if showStatus {
             statusMessage = "Saved."
         }
+    }
+
+    private func blockingBinding<Value>(_ keyPath: WritableKeyPath<AppBlockingConfig, Value>) -> Binding<Value> {
+        Binding(
+            get: { (draft.appBlocking ?? AppBlockingConfig())[keyPath: keyPath] },
+            set: { newValue in
+                var blocking = draft.appBlocking ?? AppBlockingConfig()
+                blocking[keyPath: keyPath] = newValue
+                draft.appBlocking = blocking
+            }
+        )
+    }
+
+    private func blockedAppEnabledBinding(_ index: Int) -> Binding<Bool> {
+        Binding(
+            get: {
+                let apps = draft.appBlocking?.blockedApps ?? []
+                return apps.indices.contains(index) ? apps[index].isEnabled : false
+            },
+            set: { newValue in
+                var blocking = draft.appBlocking ?? AppBlockingConfig()
+                guard blocking.blockedApps.indices.contains(index) else { return }
+                blocking.blockedApps[index].isEnabled = newValue
+                draft.appBlocking = blocking
+            }
+        )
+    }
+
+    private func addBlockedApps() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        guard panel.runModal() == .OK else { return }
+
+        var blocking = draft.appBlocking ?? AppBlockingConfig()
+        for url in panel.urls {
+            guard let identifier = Bundle(url: url)?.bundleIdentifier else { continue }
+            if blocking.blockedApps.contains(where: { $0.identifier == identifier }) { continue }
+            let name = FileManager.default.displayName(atPath: url.path)
+                .replacingOccurrences(of: ".app", with: "")
+            blocking.blockedApps.append(BlockedApp(identifier: identifier, displayName: name))
+        }
+        draft.appBlocking = blocking
+    }
+
+    private func removeBlockedApp(at index: Int) {
+        var blocking = draft.appBlocking ?? AppBlockingConfig()
+        guard blocking.blockedApps.indices.contains(index) else { return }
+        blocking.blockedApps.remove(at: index)
+        draft.appBlocking = blocking
     }
 
     private func sendTestWebhook() async {
