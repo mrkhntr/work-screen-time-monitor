@@ -25,6 +25,10 @@ public struct AppPaths: Sendable {
         applicationSupportDirectory.appendingPathComponent("history.json")
     }
 
+    public var stateURL: URL {
+        applicationSupportDirectory.appendingPathComponent("state.json")
+    }
+
     public func ensureDirectoryExists() throws {
         try FileManager.default.createDirectory(
             at: applicationSupportDirectory,

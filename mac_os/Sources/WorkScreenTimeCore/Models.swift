@@ -222,6 +222,32 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
     }
 }
 
+public struct BlockedApp: Codable, Equatable, Identifiable, Sendable {
+    public var identifier: String // macOS bundle id / Android package name
+    public var displayName: String
+    public var isEnabled: Bool
+
+    public var id: String { identifier }
+
+    public init(identifier: String, displayName: String = "", isEnabled: Bool = true) {
+        self.identifier = identifier
+        self.displayName = displayName
+        self.isEnabled = isEnabled
+    }
+}
+
+public struct AppBlockingConfig: Codable, Equatable, Sendable {
+    public var isEnabled: Bool
+    public var blockAllApps: Bool
+    public var blockedApps: [BlockedApp]
+
+    public init(isEnabled: Bool = false, blockAllApps: Bool = false, blockedApps: [BlockedApp] = []) {
+        self.isEnabled = isEnabled
+        self.blockAllApps = blockAllApps
+        self.blockedApps = blockedApps
+    }
+}
+
 public struct AppConfig: Codable, Equatable, Sendable {
     public var schedules: [DaySchedule]
     public var warningLeadMinutes: Int
@@ -230,6 +256,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var quotes: [String]
     public var escalation: EscalationConfig
     public var accountabilityWebhook: AccountabilityWebhookConfig?
+    public var appBlocking: AppBlockingConfig?
 
     public init(
         schedules: [DaySchedule],
@@ -238,7 +265,8 @@ public struct AppConfig: Codable, Equatable, Sendable {
         idleThresholdMinutes: Int = 1,
         quotes: [String],
         escalation: EscalationConfig = EscalationConfig(),
-        accountabilityWebhook: AccountabilityWebhookConfig? = nil
+        accountabilityWebhook: AccountabilityWebhookConfig? = nil,
+        appBlocking: AppBlockingConfig? = nil
     ) {
         self.schedules = schedules
         self.warningLeadMinutes = warningLeadMinutes
@@ -247,6 +275,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         self.quotes = quotes
         self.escalation = escalation
         self.accountabilityWebhook = accountabilityWebhook
+        self.appBlocking = appBlocking
     }
 
     public static let defaultQuotes = [
@@ -368,7 +397,7 @@ public struct History: Codable, Equatable, Sendable {
     }
 }
 
-public struct EscalationState: Equatable, Sendable {
+public struct EscalationState: Codable, Equatable, Sendable {
     public var snoozeCount: Int
     public var title: String
     public var message: String

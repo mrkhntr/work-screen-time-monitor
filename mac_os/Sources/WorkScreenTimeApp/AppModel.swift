@@ -4,6 +4,11 @@ import ServiceManagement
 import SwiftUI
 import WorkScreenTimeCore
 
+/// Thin native shell over the shared TypeScript brain (`core.js` via JSCoreHost).
+/// It feeds events (tick / foreground change / user actions) with a resolved
+/// `now`, persists the returned state blob, and executes the returned effects
+/// (overlay, notifications, webhook, scheduling, menu status). All decisions —
+/// schedule, escalation, app-blocking, webhook payloads — live in the core.
 @MainActor
 final class AppModel: ObservableObject {
     static weak var shared: AppModel?
@@ -16,62 +21,64 @@ final class AppModel: ObservableObject {
     @Published private(set) var showsResumeAction = false
     @Published private(set) var resumeCountdown: Int? = nil
     @Published private(set) var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
-    
+
     var isQuitting = false
 
     private let paths: AppPaths
     private let configStore: ConfigStore
-    private let historyStore: HistoryStore
     private let engine = ScheduleEngine()
     private let idleMonitor = IdleMonitor()
     private let notificationManager = NotificationManager()
     private let accountabilityWebhookNotifier = AccountabilityWebhookNotifier()
+    private let webhookSender = WebhookSender()
+    private let jsCore = JSCoreHost()
+
+    private var coreStateJSON: String
     private var settingsWindow: NSWindow?
-    private var mainTimer: Timer?
+    private var promptController: PromptWindowController?
+    private var wakeTimer: Timer?
     private var countdownTimer: Timer?
-    private var appState: AppState = .idle
+    private var workspaceObserver: NSObjectProtocol?
+    private var started = false
 
     init(paths: AppPaths = AppPaths()) {
         self.paths = paths
         try? paths.ensureDirectoryExists()
         self.configStore = ConfigStore(url: paths.configURL)
-        self.historyStore = HistoryStore(url: paths.historyURL)
         self.config = configStore.load()
+        if let data = try? Data(contentsOf: paths.stateURL),
+           let stored = String(data: data, encoding: .utf8), !stored.isEmpty {
+            self.coreStateJSON = stored
+        } else {
+            self.coreStateJSON = JSCoreHost()?.defaultStateJSON() ?? "{}"
+        }
         Self.shared = self
         start()
     }
 
     // MARK: - Public computed
 
-    var isPromptShowing: Bool {
-        if case .prompting = appState { return true }
-        return false
-    }
-
-    var menuTitle: String {
-        todaySnoozeCount > 0 ? "Balance \(todaySnoozeCount)" : "Balance"
-    }
-
+    var isPromptShowing: Bool { promptController != nil }
+    var menuTitle: String { todaySnoozeCount > 0 ? "Balance \(todaySnoozeCount)" : "Balance" }
     var configDirectoryURL: URL { paths.applicationSupportDirectory }
     var editableConfig: AppConfig { config }
 
     // MARK: - Lifecycle
 
     func start() {
-        guard mainTimer == nil else { tick(); return }
+        guard !started else { tick(); return }
+        started = true
         notificationManager.requestAuthorization()
         notificationManager.scheduleWarnings(config: config)
+        installWorkspaceObserver()
         tick()
-        scheduleNextTick()
     }
 
     func stop() {
-        mainTimer?.invalidate()
-        mainTimer = nil
-        countdownTimer?.invalidate()
-        countdownTimer = nil
-        closePromptIfShowing()
-        appState = .idle
+        wakeTimer?.invalidate(); wakeTimer = nil
+        countdownTimer?.invalidate(); countdownTimer = nil
+        removeWorkspaceObserver()
+        closePrompt()
     }
 
     // MARK: - User actions
@@ -81,8 +88,7 @@ final class AppModel: ObservableObject {
         resumeCountdown = 5
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                guard let self else { return }
-                guard let current = self.resumeCountdown else { return }
+                guard let self, let current = self.resumeCountdown else { return }
                 if current <= 1 {
                     self.cancelResume()
                     self.resumeNow()
@@ -91,7 +97,7 @@ final class AppModel: ObservableObject {
                 }
             }
         }
-        RunLoop.main.add(countdownTimer!, forMode: .common)
+        if let countdownTimer { RunLoop.main.add(countdownTimer, forMode: .common) }
     }
 
     func cancelResume() {
@@ -100,54 +106,18 @@ final class AppModel: ObservableObject {
         resumeCountdown = nil
     }
 
-    func pauseForOneHour() {
-        let now = Date()
-        let until = now.addingTimeInterval(3_600)
-        closePromptIfShowing()
-        appState = .paused(until: until)
-        try? historyStore.recordPause(dateKey: engine.dateKey(for: now), until: until, at: now)
-        refreshStatus(now: now)
-    }
-
-    func pauseUntilTomorrow() {
-        let now = Date()
-        let cal = Calendar.autoupdatingCurrent
-        let until = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: now))
-            ?? now.addingTimeInterval(86_400)
-        closePromptIfShowing()
-        appState = .paused(until: until)
-        try? historyStore.recordPause(dateKey: engine.dateKey(for: now), until: until, at: now)
-        refreshStatus(now: now)
-    }
+    func pauseForOneHour() { dispatch(event: ["type": "pauseRequested", "kind": "hour"]) }
+    func pauseUntilTomorrow() { dispatch(event: ["type": "pauseRequested", "kind": "tomorrow"]) }
 
     func enforceNow() {
-        let now = Date()
-        if case .prompting = appState {
-            return
-        }
-
+        guard !isPromptShowing else { return }
         cancelResume()
-        closePromptIfShowing()
-
-        let dateKey = engine.dateKey(for: now)
-        let summary = historyStore.summary(for: dateKey)
-        let window = manualDowntimeWindow(at: now, dateKey: dateKey)
-        showPrompt(for: window, dateKey: dateKey, summary: summary, now: now)
+        dispatch(event: ["type": "enforceNow"])
     }
 
     func resumeNow() {
-        let now = Date()
-        closePromptIfShowing()
-        appState = .idle
-        try? historyStore.recordResume(dateKey: engine.dateKey(for: now), at: now)
-        if let window = engine.activeWindow(at: now, config: config) {
-            try? historyStore.clearDismissal(
-                dateKey: engine.dateKey(for: window.start),
-                windowID: window.id,
-                at: now
-            )
-        }
-        refreshStatus(now: now)
+        cancelResume()
+        dispatch(event: ["type": "resumeNow"])
     }
 
     func openSettings() {
@@ -168,38 +138,43 @@ final class AppModel: ObservableObject {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    func openConfigFolder() {
-        NSWorkspace.shared.open(configDirectoryURL)
-    }
+    func openConfigFolder() { NSWorkspace.shared.open(configDirectoryURL) }
 
     func saveConfig(_ newConfig: AppConfig) {
-        config = newConfig
         try? configStore.save(newConfig)
-        notificationManager.scheduleWarnings(config: newConfig)
-        refreshStatus()
+        config = configStore.load()
+        notificationManager.scheduleWarnings(config: config)
         tick()
     }
 
     func clearHistory() {
-        try? historyStore.clear()
-        closePromptIfShowing()
-        appState = .idle
-        refreshStatus()
+        coreStateJSON = jsCore?.defaultStateJSON() ?? "{}"
+        persistState()
+        closePrompt()
+        tick()
     }
 
     func clearTodayHistory() {
         let now = Date()
         let window = engine.activeWindow(at: now, config: config)
         let dateKey = window.map { engine.dateKey(for: $0.start) } ?? engine.dateKey(for: now)
-        try? historyStore.clear(dateKey: dateKey)
-        closePromptIfShowing()
-        appState = .idle
-        refreshStatus(now: now)
+        if var obj = decodedState(),
+           var history = obj["history"] as? [String: Any],
+           var summaries = history["dailySummaries"] as? [String: Any] {
+            summaries.removeValue(forKey: dateKey)
+            history["dailySummaries"] = summaries
+            obj["history"] = history
+            if let data = try? JSONSerialization.data(withJSONObject: obj),
+               let s = String(data: data, encoding: .utf8) {
+                coreStateJSON = s
+                persistState()
+            }
+        }
+        closePrompt()
+        tick()
     }
 
-    func sendTestNotification() {
-        notificationManager.sendTest()
-    }
+    func sendTestNotification() { notificationManager.sendTest() }
 
     func sendTestAccountabilityWebhook() async -> (isSuccess: Bool, message: String) {
         do {
@@ -226,264 +201,162 @@ final class AppModel: ObservableObject {
         NSApplication.shared.terminate(nil)
     }
 
-    // MARK: - Tick
+    // MARK: - Core bridge
 
-    private func scheduleNextTick(now: Date = Date()) {
-        let interval: TimeInterval
-        switch appState {
-        case .prompting:
-            interval = 5
-        case .downtimeNormal:
-            interval = 10
-        case .idle, .snoozed, .paused:
-            interval = engine.activeWindow(at: now, config: config) != nil ? 10 : 60
-        }
-        let t = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                let now = Date()
-                self.tick(now: now)
-                self.scheduleNextTick(now: now)
-            }
-        }
-        RunLoop.main.add(t, forMode: .common)
-        mainTimer = t
+    private func tick() {
+        let idle = Int(idleMonitor.secondsSinceLastInput().rounded())
+        dispatch(event: ["type": "tick", "idleSeconds": idle])
     }
 
-    private func tick(now: Date = Date()) {
-        // Prompt auto-expiry check
-        if case .prompting(let controller, let shownAt) = appState {
-            let downtimeEnded = engine.activeWindow(at: now, config: config) == nil
-            let timedOut = now.timeIntervalSince(shownAt) >= 3_600
-            if downtimeEnded || timedOut {
-                autoExpirePrompt(controller: controller, now: now, downtimeEnded: downtimeEnded)
+    private func nowJSON() -> String {
+        let epochMs = Int((Date().timeIntervalSince1970 * 1000).rounded())
+        let tzOffsetMin = TimeZone.current.secondsFromGMT() / 60
+        return "{\"epochMs\":\(epochMs),\"tzOffsetMin\":\(tzOffsetMin)}"
+    }
+
+    private func configJSON() -> String {
+        guard let data = try? JSONEncoder().encode(config), let s = String(data: data, encoding: .utf8) else { return "{}" }
+        return s
+    }
+
+    private func decodedState() -> [String: Any]? {
+        guard let data = coreStateJSON.data(using: .utf8) else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    private func persistState() {
+        try? coreStateJSON.data(using: .utf8)?.write(to: paths.stateURL, options: [.atomic])
+    }
+
+    private func dispatch(event: [String: Any]) {
+        guard let jsCore,
+              let eventData = try? JSONSerialization.data(withJSONObject: event),
+              let eventJSON = String(data: eventData, encoding: .utf8) else { return }
+
+        let resultJSON = jsCore.reduce(state: coreStateJSON, event: eventJSON, now: nowJSON(), config: configJSON())
+        guard let data = resultJSON.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+
+        if let state = obj["state"],
+           let stateData = try? JSONSerialization.data(withJSONObject: state),
+           let stateString = String(data: stateData, encoding: .utf8) {
+            coreStateJSON = stateString
+            persistState()
+        }
+
+        for effect in (obj["effects"] as? [[String: Any]]) ?? [] {
+            apply(effect)
+        }
+    }
+
+    // MARK: - Effects
+
+    private func num(_ value: Any?) -> Double? { (value as? NSNumber)?.doubleValue }
+
+    private func apply(_ effect: [String: Any]) {
+        switch effect["type"] as? String {
+        case "showOverlay":
+            applyShowOverlay(effect)
+        case "hideOverlay":
+            closePrompt()
+        case "notifySnoozed":
+            if let ms = num(effect["untilMs"]) {
+                notificationManager.notifySnoozed(until: Date(timeIntervalSince1970: ms / 1000))
             }
-            refreshStatus(now: now)
-            return
-        }
-
-        // Expire paused / snoozed if their time is up
-        if case .paused(let until) = appState, now >= until { appState = .idle }
-        if case .snoozed(let until) = appState, now >= until { appState = .idle }
-
-        if case .paused = appState { refreshStatus(now: now); return }
-        if case .snoozed = appState { refreshStatus(now: now); return }
-
-        // Outside downtime — reset to idle
-        guard let window = engine.activeWindow(at: now, config: config) else {
-            appState = .idle
-            refreshStatus(now: now)
-            return
-        }
-
-        let windowDateKey = engine.dateKey(for: window.start)
-        let summary = historyStore.summary(for: windowDateKey)
-
-        // Window already dismissed — treat as idle
-        if summary.lastDismissedWindowID == window.id {
-            appState = .idle
-            refreshStatus(now: now)
-            return
-        }
-
-        let isActive = idleMonitor.secondsSinceLastInput() <= TimeInterval(config.idleThresholdMinutes * 60)
-
-        switch appState {
-        case .idle, .downtimeNormal:
-            appState = .downtimeNormal
-            if isActive {
-                showPrompt(for: window, dateKey: windowDateKey, summary: summary, now: now)
-            }
-
-        case .snoozed, .paused, .prompting:
+        case "sendWebhook":
+            if let request = effect["request"] as? [String: Any] { webhookSender.send(request) }
+        case "scheduleWake":
+            if let ms = num(effect["atEpochMs"]) { scheduleWake(atEpochMs: ms) }
+        case "setStatus":
+            applyStatus(effect)
+        default:
             break
         }
-
-        refreshStatus(now: now)
     }
 
-    // MARK: - Prompt
+    private func applyShowOverlay(_ effect: [String: Any]) {
+        guard let escDict = effect["escalation"] as? [String: Any],
+              let escData = try? JSONSerialization.data(withJSONObject: escDict),
+              let escalation = try? JSONDecoder().decode(EscalationState.self, from: escData) else { return }
 
-    private func showPrompt(for window: DowntimeWindow, dateKey: String, summary: DailySummary, now: Date) {
-        let quote = config.quotes.isEmpty ? nil : config.quotes[summary.snoozes % config.quotes.count]
-        let escalation = engine.escalationState(snoozeCount: summary.snoozes, config: config, quote: quote)
-        try? historyStore.recordPrompt(dateKey: dateKey, windowID: window.id, at: now)
+        let dateKey = (effect["dateKey"] as? String) ?? ""
+        let windowDict = effect["window"] as? [String: Any]
+        let id = (windowDict?["id"] as? String) ?? "window"
+        let weekdayRaw = Int(num(windowDict?["weekday"]) ?? 2)
+        let startMs = num(windowDict?["startMs"]) ?? (Date().timeIntervalSince1970 * 1000)
+        let endMs = num(windowDict?["endMs"]) ?? (startMs + 3_600_000)
+        let window = DowntimeWindow(
+            id: id,
+            weekday: Weekday(rawValue: weekdayRaw) ?? .monday,
+            start: Date(timeIntervalSince1970: startMs / 1000),
+            end: Date(timeIntervalSince1970: endMs / 1000)
+        )
 
+        closePrompt()
         let controller = PromptWindowController(
             window: window,
             dateKey: dateKey,
             config: config,
             escalation: escalation,
-            onSnooze: { [weak self] c, reason in self?.snooze(from: c, reason: reason) },
-            onDismiss: { [weak self] c, reason in self?.dismiss(from: c, reason: reason) }
+            onSnooze: { [weak self] _, reason in self?.dispatch(event: ["type": "userSnoozed", "reason": reason ?? NSNull()]) },
+            onDismiss: { [weak self] _, reason in self?.dispatch(event: ["type": "userDismissed", "reason": reason ?? NSNull()]) }
         )
-        appState = .prompting(controller: controller, shownAt: now)
+        promptController = controller
         controller.show()
-        refreshStatus(now: now)
     }
 
-    private func manualDowntimeWindow(at now: Date, dateKey: String) -> DowntimeWindow {
-        let weekday = Calendar.autoupdatingCurrent.component(.weekday, from: now)
-        let end = engine.nextDowntimeWindow(at: now, config: config)?.end
-            ?? now.addingTimeInterval(3_600)
-
-        return DowntimeWindow(
-            id: "manual-\(dateKey)-\(Int(now.timeIntervalSince1970))",
-            weekday: Weekday(rawValue: weekday) ?? .monday,
-            start: now,
-            end: end
-        )
-    }
-
-    private func snooze(from controller: PromptWindowController, reason: String?) {
-        let now = Date()
-        let until = now.addingTimeInterval(TimeInterval(config.snoozeMinutes * 60))
-        try? historyStore.recordSnooze(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, until: until, at: now)
-
-        let totalSnoozes = historyStore.summary(for: controller.dateKey).snoozes
-        let threshold = config.accountabilityWebhook?.snoozeNotifyThreshold
-            ?? AccountabilityTrigger.defaultSnoozeNotifyThreshold
-        if AccountabilityTrigger.notifiesOnSnooze(totalSnoozesAfter: totalSnoozes, threshold: threshold) {
-            sendAccountabilityWebhook(
-                kind: .snoozed,
-                timestamp: now,
-                dateKey: controller.dateKey,
-                windowID: controller.downtimeWindow.id,
-                snoozeCount: totalSnoozes,
-                dismissalReason: reason
-            )
+    private func applyStatus(_ effect: [String: Any]) {
+        var text = (effect["text"] as? String) ?? statusText
+        if text.hasSuffix("until"), let ms = num(effect["untilMs"]) {
+            text += " " + shortTime(Date(timeIntervalSince1970: ms / 1000))
         }
-
-        notificationManager.notifySnoozed(until: until)
-        controller.closeAll()
-        appState = .snoozed(until: until)
-        refreshStatus(now: now)
+        statusText = text
+        menuSystemImage = (effect["icon"] as? String) ?? menuSystemImage
+        todaySnoozeCount = Int(num(effect["snoozeCount"]) ?? Double(todaySnoozeCount))
+        showsPauseActions = (effect["showsPauseActions"] as? Bool) ?? showsPauseActions
+        showsResumeAction = (effect["showsResumeAction"] as? Bool) ?? showsResumeAction
     }
 
-    private func dismiss(from controller: PromptWindowController, reason: String?) {
-        let now = Date()
-        try? historyStore.recordDismissal(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, reason: reason, at: now)
-        sendAccountabilityWebhook(
-            kind: .dismissed,
-            timestamp: now,
-            dateKey: controller.dateKey,
-            windowID: controller.downtimeWindow.id,
-            snoozeCount: historyStore.summary(for: controller.dateKey).snoozes,
-            dismissalReason: reason
-        )
-        controller.closeAll()
-        appState = .idle
-        refreshStatus(now: now)
+    private func closePrompt() {
+        promptController?.closeAll()
+        promptController = nil
     }
 
-    private func sendAccountabilityWebhook(
-        kind: AccountabilityWebhookEventKind,
-        timestamp: Date,
-        dateKey: String,
-        windowID: String?,
-        snoozeCount: Int?,
-        dismissalReason: String?
-    ) {
-        let webhookConfig = config.accountabilityWebhook
-        let event = AccountabilityWebhookEvent(
-            kind: kind,
-            timestamp: timestamp,
-            dateKey: dateKey,
-            windowID: windowID,
-            snoozeCount: snoozeCount,
-            dismissalReason: dismissalReason
-        )
-        Task {
-            try? await accountabilityWebhookNotifier.send(event, using: webhookConfig)
+    private func scheduleWake(atEpochMs: Double) {
+        let fireDate = Date(timeIntervalSince1970: atEpochMs / 1000)
+        let interval = max(1, fireDate.timeIntervalSinceNow)
+        wakeTimer?.invalidate()
+        let timer = Timer(timeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.tick() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        wakeTimer = timer
+    }
+
+    private func installWorkspaceObserver() {
+        guard workspaceObserver == nil else { return }
+        workspaceObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+                  let bundleId = app.bundleIdentifier else { return }
+            Task { @MainActor in self?.dispatch(event: ["type": "foregroundChanged", "appId": bundleId]) }
         }
     }
 
-    private func autoExpirePrompt(controller: PromptWindowController, now: Date, downtimeEnded: Bool) {
-        if !downtimeEnded {
-            try? historyStore.recordDismissal(
-                dateKey: controller.dateKey,
-                windowID: controller.downtimeWindow.id,
-                reason: nil,
-                at: now
-            )
-        }
-        controller.closeAll()
-        appState = .idle
-    }
-
-    private func closePromptIfShowing() {
-        if case .prompting(let controller, _) = appState {
-            controller.closeAll()
-        }
-    }
-
-    // MARK: - Status
-
-    private func refreshStatus(now: Date = Date()) {
-        let currentWindow = engine.activeWindow(at: now, config: config)
-        let dateKey = currentWindow.map { engine.dateKey(for: $0.start) } ?? engine.dateKey(for: now)
-        todaySnoozeCount = historyStore.summary(for: dateKey).snoozes
-
-        switch appState {
-        case .prompting:
-            menuSystemImage = "exclamationmark.octagon.fill"
-            statusText = "Enforcement active"
-            showsPauseActions = false
-            showsResumeAction = false
-
-        case .paused(let until):
-            menuSystemImage = "pause.circle.fill"
-            statusText = "Paused until \(shortTime(until))"
-            showsPauseActions = false
-            showsResumeAction = true
-
-        case .snoozed(let until):
-            menuSystemImage = "moon.zzz.fill"
-            statusText = "Snoozed until \(shortTime(until))"
-            showsPauseActions = false
-            showsResumeAction = true
-
-        case .downtimeNormal:
-            menuSystemImage = "moon.fill"
-            statusText = "In downtime"
-            showsPauseActions = true
-            showsResumeAction = false
-
-        case .idle:
-            if let currentWindow {
-                let summary = historyStore.summary(for: engine.dateKey(for: currentWindow.start))
-                if summary.lastDismissedWindowID == currentWindow.id {
-                    menuSystemImage = "checkmark.circle.fill"
-                    statusText = "Dismissed for current window"
-                    showsPauseActions = false
-                    showsResumeAction = true
-                } else {
-                    menuSystemImage = "moon.fill"
-                    statusText = "In downtime"
-                    showsPauseActions = true
-                    showsResumeAction = false
-                }
-            } else {
-                menuSystemImage = "sun.max"
-                statusText = "Outside downtime"
-                showsPauseActions = true
-                showsResumeAction = false
-            }
+    private func removeWorkspaceObserver() {
+        if let workspaceObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(workspaceObserver)
+            self.workspaceObserver = nil
         }
     }
 
     private func shortTime(_ date: Date) -> String {
-        let f = DateFormatter()
-        f.timeStyle = .short
-        f.dateStyle = .none
-        return f.string(from: date)
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter.string(from: date)
     }
-}
-
-private enum AppState {
-    case idle
-    case downtimeNormal
-    case snoozed(until: Date)
-    case paused(until: Date)
-    case prompting(controller: PromptWindowController, shownAt: Date)
 }
