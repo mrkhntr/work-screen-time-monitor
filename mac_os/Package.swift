@@ -15,7 +15,15 @@ let package = Package(
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.9.1")
     ],
     targets: [
-        .target(name: "WorkScreenTimeCore"),
+        .target(
+            name: "WorkScreenTimeCore",
+            resources: [
+                .copy("Resources/core.js")
+            ],
+            linkerSettings: [
+                .linkedFramework("JavaScriptCore")
+            ]
+        ),
         .executableTarget(
             name: "WorkScreenTimeApp",
             dependencies: [
