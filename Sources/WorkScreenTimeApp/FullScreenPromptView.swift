@@ -75,7 +75,7 @@ struct FullScreenPromptView: View {
                     .foregroundStyle(.white.opacity(0.82))
                     .frame(maxWidth: 760)
 
-                AsyncImage(url: URL(string: "https://gifroz.vercel.app/")) { image in
+                AsyncImage(url: URL(string: "https://picsum.photos/240")) { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
