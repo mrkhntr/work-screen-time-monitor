@@ -37,10 +37,6 @@ struct MenuBarContentView: View {
 
             CheckForUpdatesView(updater: updater)
 
-            Button(model.launchAtLogin ? "Disable Launch at Login" : "Enable Launch at Login") {
-                model.toggleLaunchAtLogin()
-            }
-
             Menu("Advanced") {
                 Button("Send Test Notification") {
                     model.sendTestNotification()

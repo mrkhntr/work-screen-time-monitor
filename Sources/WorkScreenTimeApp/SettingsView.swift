@@ -293,6 +293,15 @@ struct SettingsView: View {
             settingsPanel("Maintenance") {
                 Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: 18, verticalSpacing: 12) {
                     GridRow {
+                        rowLabel("Launch at Login")
+                        Toggle("Start automatically when you log in", isOn: Binding(
+                            get: { model.launchAtLogin },
+                            set: { _ in model.toggleLaunchAtLogin() }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+                    rowDivider(columns: 2)
+                    GridRow {
                         rowLabel("History")
                         HStack(spacing: 8) {
                             Button {
