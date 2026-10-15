@@ -75,6 +75,21 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
         center.add(UNNotificationRequest(identifier: "snoozed-\(UUID().uuidString)", content: content, trigger: nil))
     }
 
+    /// Reminds the user halfway through a snooze of what they said they were working on.
+    func scheduleGoalReminder(goal: String, snoozeMinutes: Int) {
+        let halfway = TimeInterval(snoozeMinutes * 60) / 2
+        let minutesLeft = Int((halfway / 60).rounded(.up))
+
+        let content = UNMutableNotificationContent()
+        content.title = "\(minutesLeft) min left on your snooze"
+        content.body = "You said you were working on: \u{201C}\(goal)\u{201D}"
+        content.sound = .default
+
+        // A fixed identifier so a newer snooze replaces any reminder still pending.
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(halfway, 1), repeats: false)
+        center.add(UNNotificationRequest(identifier: "snooze-goal-reminder", content: content, trigger: trigger))
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,

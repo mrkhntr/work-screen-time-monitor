@@ -107,6 +107,9 @@ final class ConfigStoreTests: XCTestCase {
 
         let loaded = store.load()
 
+        XCTAssertEqual(loaded.escalation.pauseRequiredAtSnoozeCount, 2)
+        XCTAssertEqual(loaded.escalation.pauseSeconds, 10)
+        XCTAssertEqual(loaded.escalation.holdRequiredAtSnoozeCount, 2)
         XCTAssertEqual(loaded.accountabilityWebhook?.headers, [])
         XCTAssertEqual(loaded.accountabilityWebhook?.apiKey, "")
         XCTAssertEqual(loaded.accountabilityWebhook?.bodyFields, [])

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import WorkScreenTimeCore
@@ -47,6 +48,7 @@ struct SettingsView: View {
     @State private var selectedPage: SettingsPage? = .schedule
     @State private var webhookTestState: WebhookTestState = .idle
     @State private var webhookTestMessage = ""
+    @State private var isImportingPhotos = false
 
     init(model: AppModel) {
         self.model = model
@@ -211,6 +213,29 @@ struct SettingsView: View {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color(nsColor: .separatorColor), lineWidth: 1)
                     )
+            }
+
+            settingsPanel("Photos") {
+                Text("Shown on the prompt and in the Remind pause. Without any, a random photo is used. Changes apply right away.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                if !model.photos.isEmpty {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 10)], spacing: 10) {
+                        ForEach(model.photos, id: \.self) { url in
+                            PhotoThumbnail(url: url) { model.removePhoto(url) }
+                        }
+                    }
+                }
+
+                Button("Add Photos…", systemImage: "plus") { isImportingPhotos = true }
+                    .fileImporter(
+                        isPresented: $isImportingPhotos,
+                        allowedContentTypes: [.image],
+                        allowsMultipleSelection: true
+                    ) { result in
+                        if case .success(let urls) = result { model.addPhotos(urls) }
+                    }
             }
 
         case .accountability:
@@ -741,5 +766,37 @@ struct SettingsView: View {
     private func timeOfDay(from date: Date) -> TimeOfDay {
         let components = Calendar.autoupdatingCurrent.dateComponents([.hour, .minute], from: date)
         return TimeOfDay(hour: components.hour ?? 0, minute: components.minute ?? 0)
+    }
+}
+
+private struct PhotoThumbnail: View {
+    let url: URL
+    let onRemove: () -> Void
+
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Group {
+                if let image {
+                    Image(nsImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color(nsColor: .quaternaryLabelColor)
+                }
+            }
+            .frame(width: 96, height: 96)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            Button(action: onRemove) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(.white, .black.opacity(0.6))
+            }
+            .buttonStyle(.plain)
+            .padding(4)
+            .help("Remove photo")
+        }
+        .task(id: url) { image = NSImage(contentsOf: url) }
     }
 }

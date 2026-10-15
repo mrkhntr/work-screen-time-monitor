@@ -16,6 +16,7 @@ CREATE_ZIP=0
 CREATE_DMG=1
 APP_VERSION="${APP_VERSION:-}"
 APP_BUILD="${APP_BUILD:-}"
+BUILD_CONFIG="${BUILD_CONFIG:-release}"
 
 usage() {
   cat >&2 <<USAGE
@@ -25,6 +26,7 @@ Environment overrides:
   APP_VERSION  Version string for CFBundleShortVersionString
   APP_BUILD    Build number for CFBundleVersion
   PKG_PATH     Output dmg or zip path
+  BUILD_CONFIG SwiftPM configuration: release (default) or debug
 USAGE
 }
 
@@ -149,9 +151,9 @@ if [[ ! -f "$ICON_ICNS" || "$ICON_SRC" -nt "$ICON_ICNS" ]]; then
   iconutil -c icns "$ICONSET" -o "$ICON_ICNS"
 fi
 
-swift build -c release
+swift build -c "$BUILD_CONFIG"
 
-BUILT_EXECUTABLE="$ROOT_DIR/.build/release/$APP_NAME"
+BUILT_EXECUTABLE="$ROOT_DIR/.build/$BUILD_CONFIG/$APP_NAME"
 if [[ ! -x "$BUILT_EXECUTABLE" ]]; then
   echo "SwiftPM reported success, but no executable was found at $BUILT_EXECUTABLE" >&2
   exit 1

@@ -127,6 +127,9 @@ public struct ScheduleEngine: Sendable {
             title: title,
             message: baseMessage,
             confirmationPhrase: Self.confirmationPhrase(config: config, quote: quote),
+            requiresPause: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.pauseRequiredAtSnoozeCount)
+                && config.escalation.pauseSeconds > 0,
+            pauseSeconds: max(0, config.escalation.pauseSeconds),
             requiresHold: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.holdRequiredAtSnoozeCount),
             requiresPhrase: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.phraseRequiredAtSnoozeCount),
             requiresReason: Self.hasReachedEscalationThreshold(snoozeCount, threshold: config.escalation.reasonRequiredAtSnoozeCount)

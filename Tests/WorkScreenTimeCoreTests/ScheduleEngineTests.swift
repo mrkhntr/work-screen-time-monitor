@@ -184,9 +184,30 @@ final class ScheduleEngineTests: XCTestCase {
         let config = AppConfig.default
 
         XCTAssertFalse(engine.escalationState(snoozeCount: 1, config: config, quote: nil).requiresHold)
+        XCTAssertFalse(engine.escalationState(snoozeCount: 0, config: config, quote: nil).requiresReason)
+        XCTAssertTrue(engine.escalationState(snoozeCount: 1, config: config, quote: nil).requiresReason)
+        XCTAssertFalse(engine.escalationState(snoozeCount: 2, config: config, quote: nil).requiresPhrase)
         XCTAssertTrue(engine.escalationState(snoozeCount: 2, config: config, quote: nil).requiresHold)
         XCTAssertTrue(engine.escalationState(snoozeCount: 3, config: config, quote: nil).requiresPhrase)
         XCTAssertTrue(engine.escalationState(snoozeCount: 3, config: config, quote: nil).requiresReason)
+    }
+
+    func testPausePointRequiredAfterMoreThanOneSnooze() {
+        let config = AppConfig.default
+
+        XCTAssertFalse(engine.escalationState(snoozeCount: 0, config: config, quote: nil).requiresPause)
+        XCTAssertFalse(engine.escalationState(snoozeCount: 1, config: config, quote: nil).requiresPause)
+        let second = engine.escalationState(snoozeCount: 2, config: config, quote: nil)
+        XCTAssertTrue(second.requiresPause)
+        XCTAssertEqual(second.pauseSeconds, 10)
+        XCTAssertTrue(engine.escalationState(snoozeCount: 5, config: config, quote: nil).requiresPause)
+    }
+
+    func testPausePointDisabledWhenPauseSecondsIsZero() {
+        var config = AppConfig.default
+        config.escalation.pauseSeconds = 0
+
+        XCTAssertFalse(engine.escalationState(snoozeCount: 3, config: config, quote: nil).requiresPause)
     }
 
     func testEscalationUsesCustomThresholdsInclusively() {

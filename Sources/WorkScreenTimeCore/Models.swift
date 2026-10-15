@@ -89,21 +89,45 @@ public struct DaySchedule: Codable, Equatable, Sendable {
 }
 
 public struct EscalationConfig: Codable, Equatable, Sendable {
+    public var pauseRequiredAtSnoozeCount: Int
+    public var pauseSeconds: Int
     public var holdRequiredAtSnoozeCount: Int
     public var phraseRequiredAtSnoozeCount: Int
     public var reasonRequiredAtSnoozeCount: Int
     public var confirmationPhrase: String
 
     public init(
+        pauseRequiredAtSnoozeCount: Int = 2,
+        pauseSeconds: Int = 10,
         holdRequiredAtSnoozeCount: Int = 2,
         phraseRequiredAtSnoozeCount: Int = 3,
-        reasonRequiredAtSnoozeCount: Int = 3,
+        reasonRequiredAtSnoozeCount: Int = 1,
         confirmationPhrase: String = "I am done for today"
     ) {
+        self.pauseRequiredAtSnoozeCount = pauseRequiredAtSnoozeCount
+        self.pauseSeconds = pauseSeconds
         self.holdRequiredAtSnoozeCount = holdRequiredAtSnoozeCount
         self.phraseRequiredAtSnoozeCount = phraseRequiredAtSnoozeCount
         self.reasonRequiredAtSnoozeCount = reasonRequiredAtSnoozeCount
         self.confirmationPhrase = confirmationPhrase
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let defaults = Self()
+        self.init(
+            pauseRequiredAtSnoozeCount: try container.decodeIfPresent(Int.self, forKey: .pauseRequiredAtSnoozeCount)
+                ?? defaults.pauseRequiredAtSnoozeCount,
+            pauseSeconds: try container.decodeIfPresent(Int.self, forKey: .pauseSeconds) ?? defaults.pauseSeconds,
+            holdRequiredAtSnoozeCount: try container.decodeIfPresent(Int.self, forKey: .holdRequiredAtSnoozeCount)
+                ?? defaults.holdRequiredAtSnoozeCount,
+            phraseRequiredAtSnoozeCount: try container.decodeIfPresent(Int.self, forKey: .phraseRequiredAtSnoozeCount)
+                ?? defaults.phraseRequiredAtSnoozeCount,
+            reasonRequiredAtSnoozeCount: try container.decodeIfPresent(Int.self, forKey: .reasonRequiredAtSnoozeCount)
+                ?? defaults.reasonRequiredAtSnoozeCount,
+            confirmationPhrase: try container.decodeIfPresent(String.self, forKey: .confirmationPhrase)
+                ?? defaults.confirmationPhrase
+        )
     }
 }
 
@@ -373,6 +397,8 @@ public struct EscalationState: Equatable, Sendable {
     public var title: String
     public var message: String
     public var confirmationPhrase: String
+    public var requiresPause: Bool
+    public var pauseSeconds: Int
     public var requiresHold: Bool
     public var requiresPhrase: Bool
     public var requiresReason: Bool

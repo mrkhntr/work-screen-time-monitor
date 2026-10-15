@@ -9,9 +9,10 @@ final class PromptWindowController {
 
     private let config: AppConfig
     private let escalation: EscalationState
+    private let photos: [URL]
     private let onSnooze: (PromptWindowController, String?) -> Void
     private let onDismiss: (PromptWindowController, String?) -> Void
-    private let formState = PromptFormState()
+    private let formState: PromptFormState
     private var windows: [NSWindow] = []
     private var screenChangeObserver: NSObjectProtocol?
     private var screenRebuildTask: Task<Void, Never>?
@@ -22,13 +23,17 @@ final class PromptWindowController {
         dateKey: String,
         config: AppConfig,
         escalation: EscalationState,
+        photos: [URL],
         onSnooze: @escaping (PromptWindowController, String?) -> Void,
-        onDismiss: @escaping (PromptWindowController, String?) -> Void
+        onDismiss: @escaping (PromptWindowController, String?) -> Void,
+        pauseKind: PausePointKind? = nil
     ) {
+        self.formState = PromptFormState(pauseKind: pauseKind)
         self.downtimeWindow = window
         self.dateKey = dateKey
         self.config = config
         self.escalation = escalation
+        self.photos = photos
         self.onSnooze = onSnooze
         self.onDismiss = onDismiss
     }
@@ -86,7 +91,7 @@ final class PromptWindowController {
         cancelPendingScreenRebuild()
 
         screenRebuildTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
+            try? await Task.sleep(for: .milliseconds(250))
             guard !Task.isCancelled else { return }
 
             self?.rebuildWindowsForCurrentScreens()
@@ -109,6 +114,7 @@ final class PromptWindowController {
         let view = FullScreenPromptView(
             config: config,
             escalation: escalation,
+            photos: photos,
             onSnooze: { [weak self] reason in self?.finishSnooze(reason: reason) },
             onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) },
             formState: formState

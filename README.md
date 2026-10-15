@@ -100,6 +100,13 @@ sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 open .build/WorkScreenTimeApp.app
 ```
 
+To preview the pause point screen without waiting for downtime, build a debug bundle and launch it with `WST_PREVIEW_PAUSE` (`breathe`, `remind` or `random`; `WST_PREVIEW_SNOOZES` sets the snooze count, default 2). Nothing is written to history and no webhook fires:
+
+```sh
+BUILD_CONFIG=debug ./scripts/build_app.sh --no-zip
+WST_PREVIEW_PAUSE=breathe .build/WorkScreenTimeApp.app/Contents/MacOS/WorkScreenTimeApp
+```
+
 The first launch should request notification permission. If you miss it, enable notifications in System Settings.
 
 For unsigned friend/team builds, newer macOS versions may block the first launch. Recommended workarounds:

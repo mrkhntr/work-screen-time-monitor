@@ -12,6 +12,7 @@ final class AppModel: ObservableObject {
     @Published private(set) var statusText = "Starting"
     @Published private(set) var menuSystemImage = "clock"
     @Published private(set) var todaySnoozeCount = 0
+    @Published private(set) var photos: [URL] = []
     @Published private(set) var showsPauseActions = true
     @Published private(set) var showsResumeAction = false
     @Published private(set) var resumeCountdown: Int? = nil
@@ -20,6 +21,7 @@ final class AppModel: ObservableObject {
     var isQuitting = false
 
     private let paths: AppPaths
+    private let photoStore: PhotoStore
     private let configStore: ConfigStore
     private let historyStore: HistoryStore
     private let engine = ScheduleEngine()
@@ -36,6 +38,8 @@ final class AppModel: ObservableObject {
         try? paths.ensureDirectoryExists()
         self.configStore = ConfigStore(url: paths.configURL)
         self.historyStore = HistoryStore(url: paths.historyURL)
+        self.photoStore = PhotoStore(directory: paths.photosDirectory)
+        self.photos = photoStore.list()
         self.config = configStore.load()
         Self.shared = self
         start()
@@ -58,6 +62,9 @@ final class AppModel: ObservableObject {
     // MARK: - Lifecycle
 
     func start() {
+        #if DEBUG
+        if showPausePreviewIfRequested() { return }
+        #endif
         guard mainTimer == nil else { tick(); return }
         notificationManager.requestAuthorization()
         notificationManager.scheduleWarnings(config: config)
@@ -75,6 +82,16 @@ final class AppModel: ObservableObject {
     }
 
     // MARK: - User actions
+
+    func addPhotos(_ urls: [URL]) {
+        _ = try? photoStore.add(urls)
+        photos = photoStore.list()
+    }
+
+    func removePhoto(_ url: URL) {
+        try? photoStore.remove(url)
+        photos = photoStore.list()
+    }
 
     func startResumeCountdown() {
         guard resumeCountdown == nil else { return }
@@ -314,6 +331,7 @@ final class AppModel: ObservableObject {
             dateKey: dateKey,
             config: config,
             escalation: escalation,
+            photos: photos,
             onSnooze: { [weak self] c, reason in self?.snooze(from: c, reason: reason) },
             onDismiss: { [weak self] c, reason in self?.dismiss(from: c, reason: reason) }
         )
@@ -321,6 +339,37 @@ final class AppModel: ObservableObject {
         controller.show()
         refreshStatus(now: now)
     }
+
+    #if DEBUG
+    private var previewController: PromptWindowController?
+
+    /// Shows the prompt immediately when launched with WST_PREVIEW_PAUSE=breathe|remind|random, without touching history or webhooks.
+    private func showPausePreviewIfRequested() -> Bool {
+        let env = ProcessInfo.processInfo.environment
+        guard let mode = env["WST_PREVIEW_PAUSE"]?.lowercased() else { return false }
+        guard previewController == nil else { return true }
+
+        let now = Date()
+        let snoozes = env["WST_PREVIEW_SNOOZES"].flatMap(Int.init) ?? 2
+        let controller = PromptWindowController(
+            window: DowntimeWindow(id: "preview", weekday: .monday, start: now, end: now.addingTimeInterval(3_600)),
+            dateKey: "preview",
+            config: config,
+            escalation: engine.escalationState(snoozeCount: snoozes, config: config, quote: nil),
+            photos: photos,
+            onSnooze: { [weak self] c, _ in c.closeAll(); self?.previewController = nil },
+            onDismiss: { [weak self] c, _ in c.closeAll(); self?.previewController = nil },
+            pauseKind: PausePointKind(rawValue: mode)
+        )
+        previewController = controller
+        // start() runs from init, before the app has finished launching.
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            controller.show()
+        }
+        return true
+    }
+    #endif
 
     private func manualDowntimeWindow(at now: Date, dateKey: String) -> DowntimeWindow {
         let weekday = Calendar.autoupdatingCurrent.component(.weekday, from: now)
@@ -355,6 +404,9 @@ final class AppModel: ObservableObject {
         }
 
         notificationManager.notifySnoozed(until: until)
+        if let reason {
+            notificationManager.scheduleGoalReminder(goal: reason, snoozeMinutes: config.snoozeMinutes)
+        }
         controller.closeAll()
         appState = .snoozed(until: until)
         refreshStatus(now: now)

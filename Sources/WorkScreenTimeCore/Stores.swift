@@ -25,11 +25,56 @@ public struct AppPaths: Sendable {
         applicationSupportDirectory.appendingPathComponent("history.json")
     }
 
+    public var photosDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("Photos", isDirectory: true)
+    }
+
     public func ensureDirectoryExists() throws {
         try FileManager.default.createDirectory(
             at: applicationSupportDirectory,
             withIntermediateDirectories: true
         )
+    }
+}
+
+/// User-added prompt photos, stored as copies so the originals can be moved or deleted.
+public final class PhotoStore {
+    public static let supportedExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "gif", "tiff", "webp"]
+
+    public let directory: URL
+
+    public init(directory: URL) {
+        self.directory = directory
+    }
+
+    /// Lists stored photos, oldest first.
+    public func list() -> [URL] {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        return files
+            .filter { Self.supportedExtensions.contains($0.pathExtension.lowercased()) }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Copies supported images into the store, skipping anything else, and returns the new copies.
+    @discardableResult
+    public func add(_ sources: [URL], now: Date = Date()) throws -> [URL] {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let timestamp = Int(now.timeIntervalSince1970 * 1000)
+        return try sources.enumerated().compactMap { index, source in
+            let ext = source.pathExtension.lowercased()
+            guard Self.supportedExtensions.contains(ext) else { return nil }
+            // Timestamp-first names keep list() in the order photos were added.
+            let name = String(format: "%013d-%03d-%@.%@", timestamp, index, UUID().uuidString, ext)
+            let destination = directory.appendingPathComponent(name)
+            try FileManager.default.copyItem(at: source, to: destination)
+            return destination
+        }
+    }
+
+    /// Deletes a stored photo; URLs outside the store are ignored.
+    public func remove(_ url: URL) throws {
+        guard url.deletingLastPathComponent().resolvingSymlinksInPath() == directory.resolvingSymlinksInPath() else { return }
+        try FileManager.default.removeItem(at: url)
     }
 }
 
@@ -87,6 +132,8 @@ public final class ConfigStore {
 
     private func normalized(_ escalation: EscalationConfig) -> EscalationConfig {
         var copy = escalation
+        copy.pauseRequiredAtSnoozeCount = max(0, copy.pauseRequiredAtSnoozeCount)
+        copy.pauseSeconds = min(max(0, copy.pauseSeconds), 60)
         copy.holdRequiredAtSnoozeCount = max(0, copy.holdRequiredAtSnoozeCount)
         copy.phraseRequiredAtSnoozeCount = max(0, copy.phraseRequiredAtSnoozeCount)
         copy.reasonRequiredAtSnoozeCount = max(0, copy.reasonRequiredAtSnoozeCount)
