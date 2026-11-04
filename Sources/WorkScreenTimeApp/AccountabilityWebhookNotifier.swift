@@ -127,12 +127,17 @@ struct AccountabilityWebhookNotifier {
         if appendsReason, !reason.isEmpty, !template.contains("{{reason}}") {
             rendered += "\nReason: \(reason)"
         }
-        if event.kind == .snoozed, let minutes = event.snoozeMinutes, !template.contains("{{snoozeMinutes}}") {
-            let until = event.snoozeUntil.map { " (prompts again at \($0.formatted(date: .omitted, time: .shortened)))" } ?? ""
-            rendered += "\nSnoozed for \(minutes) min\(until)"
+        if let detail = snoozeDetail(for: event), !template.contains("{{snoozeDetail}}"), !template.contains("{{snoozeMinutes}}") {
+            rendered += "\n\(detail)"
         }
 
-        return rendered
+        return rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func snoozeDetail(for event: AccountabilityWebhookEvent) -> String? {
+        guard event.kind == .snoozed, let minutes = event.snoozeMinutes else { return nil }
+        let until = event.snoozeUntil.map { " (prompts again at \($0.formatted(date: .omitted, time: .shortened)))" } ?? ""
+        return "Snoozed for \(minutes) min\(until)"
     }
 
     private static let missingReasonPlaceholder = "<No Reason Given>"
@@ -150,6 +155,7 @@ struct AccountabilityWebhookNotifier {
             "snoozeCount": event.snoozeCount.map(String.init) ?? "",
             "snoozeMinutes": event.snoozeMinutes.map(String.init) ?? "",
             "snoozeUntil": event.snoozeUntil?.ISO8601Format() ?? "",
+            "snoozeDetail": snoozeDetail(for: event) ?? "",
             "reason": displayReason,
             "dismissalReason": displayReason
         ]
