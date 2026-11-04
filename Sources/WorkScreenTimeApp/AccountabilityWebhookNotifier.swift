@@ -105,7 +105,7 @@ struct AccountabilityWebhookNotifier {
         }
     }
 
-    private func renderedBody(for event: AccountabilityWebhookEvent, using config: AccountabilityWebhookConfig) throws -> Data {
+    func renderedBody(for event: AccountabilityWebhookEvent, using config: AccountabilityWebhookConfig) throws -> Data {
         let message = renderedMessage(from: config.messageTemplate, for: event)
         var object: [String: String] = ["message": message]
         let values = templateValues(for: event, message: message)
@@ -119,25 +119,31 @@ struct AccountabilityWebhookNotifier {
         return try JSONSerialization.data(withJSONObject: object)
     }
 
-    private func renderedMessage(from template: String, for event: AccountabilityWebhookEvent) -> String {
+    func renderedMessage(from template: String, for event: AccountabilityWebhookEvent) -> String {
         let reason = event.dismissalReason ?? ""
         var rendered = renderTemplate(template, values: templateValues(for: event, message: reason))
 
-        let appendsReason = event.kind == .dismissed || event.kind == .snoozed
-        if appendsReason, !reason.isEmpty, !template.contains("{{reason}}") {
+        if event.kind != .test, !reason.isEmpty, !template.contains("{{reason}}") {
             rendered += "\nReason: \(reason)"
         }
-        if let detail = snoozeDetail(for: event), !template.contains("{{snoozeDetail}}"), !template.contains("{{snoozeMinutes}}") {
+        if let detail = snoozeDetail(for: event), !template.contains("{{snoozeDetail}}") {
             rendered += "\n\(detail)"
         }
 
-        return rendered.trimmingCharacters(in: .whitespacesAndNewlines)
+        return rendered.replacingOccurrences(of: "  ", with: " ").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func snoozeDetail(for event: AccountabilityWebhookEvent) -> String? {
-        guard event.kind == .snoozed, let minutes = event.snoozeMinutes else { return nil }
-        let until = event.snoozeUntil.map { " (prompts again at \($0.formatted(date: .omitted, time: .shortened)))" } ?? ""
-        return "Snoozed for \(minutes) min\(until)"
+        guard event.kind == .snoozed, let until = event.snoozeUntil else { return nil }
+        return "Prompts again at \(until.formatted(date: .omitted, time: .shortened))"
+    }
+
+    private func duration(for event: AccountabilityWebhookEvent) -> String {
+        switch (event.kind, event.snoozeMinutes) {
+        case (.dismissed, _): "for the day"
+        case (.snoozed, let minutes?): "for \(minutes) min"
+        default: ""
+        }
     }
 
     private static let missingReasonPlaceholder = "<No Reason Given>"
@@ -155,6 +161,7 @@ struct AccountabilityWebhookNotifier {
             "snoozeCount": event.snoozeCount.map(String.init) ?? "",
             "snoozeMinutes": event.snoozeMinutes.map(String.init) ?? "",
             "snoozeUntil": event.snoozeUntil?.ISO8601Format() ?? "",
+            "duration": duration(for: event),
             "snoozeDetail": snoozeDetail(for: event) ?? "",
             "reason": displayReason,
             "dismissalReason": displayReason

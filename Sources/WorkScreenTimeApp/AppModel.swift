@@ -28,6 +28,8 @@ final class AppModel: ObservableObject {
     private let idleMonitor = IdleMonitor()
     private let notificationManager = NotificationManager()
     private let accountabilityWebhookNotifier = AccountabilityWebhookNotifier()
+    /// Launched with `--test`: snoozes and dismissals work as normal but never reach the accountability webhook.
+    private let isTestMode = CommandLine.arguments.contains("--test")
     private var settingsWindow: NSWindow?
     private var mainTimer: Timer?
     private var countdownTimer: Timer?
@@ -332,7 +334,7 @@ final class AppModel: ObservableObject {
             config: config,
             escalation: escalation,
             photos: photos,
-            onSnooze: { [weak self] c, reason in self?.snooze(from: c, reason: reason) },
+            onSnooze: { [weak self] c, minutes, reason in self?.snooze(from: c, minutes: minutes, reason: reason) },
             onDismiss: { [weak self] c, reason in self?.dismiss(from: c, reason: reason) }
         )
         appState = .prompting(controller: controller, shownAt: now)
@@ -357,7 +359,7 @@ final class AppModel: ObservableObject {
             config: config,
             escalation: engine.escalationState(snoozeCount: snoozes, config: config, quote: nil),
             photos: photos,
-            onSnooze: { [weak self] c, _ in c.closeAll(); self?.previewController = nil },
+            onSnooze: { [weak self] c, _, _ in c.closeAll(); self?.previewController = nil },
             onDismiss: { [weak self] c, _ in c.closeAll(); self?.previewController = nil },
             pauseKind: PausePointKind(rawValue: mode)
         )
@@ -384,9 +386,9 @@ final class AppModel: ObservableObject {
         )
     }
 
-    private func snooze(from controller: PromptWindowController, reason: String?) {
+    private func snooze(from controller: PromptWindowController, minutes: Int, reason: String?) {
         let now = Date()
-        let until = now.addingTimeInterval(TimeInterval(config.snoozeMinutes * 60))
+        let until = now.addingTimeInterval(TimeInterval(minutes * 60))
         try? historyStore.recordSnooze(dateKey: controller.dateKey, windowID: controller.downtimeWindow.id, until: until, at: now)
 
         let totalSnoozes = historyStore.summary(for: controller.dateKey).snoozes
@@ -400,14 +402,14 @@ final class AppModel: ObservableObject {
                 windowID: controller.downtimeWindow.id,
                 snoozeCount: totalSnoozes,
                 dismissalReason: reason,
-                snoozeMinutes: config.snoozeMinutes,
+                snoozeMinutes: minutes,
                 snoozeUntil: until
             )
         }
 
         notificationManager.notifySnoozed(until: until)
         if let reason {
-            notificationManager.scheduleGoalReminder(goal: reason, snoozeMinutes: config.snoozeMinutes)
+            notificationManager.scheduleGoalReminder(goal: reason, snoozeMinutes: minutes)
         }
         controller.closeAll()
         appState = .snoozed(until: until)
@@ -440,6 +442,7 @@ final class AppModel: ObservableObject {
         snoozeMinutes: Int? = nil,
         snoozeUntil: Date? = nil
     ) {
+        guard !isTestMode else { return }
         let webhookConfig = config.accountabilityWebhook
         let event = AccountabilityWebhookEvent(
             kind: kind,

@@ -185,7 +185,7 @@ public struct AccountabilityWebhookConfig: Codable, Equatable, Sendable {
         bearerToken: String = "",
         apiKey: String = "",
         headers: [AccountabilityWebhookHeader] = [],
-        messageTemplate: String = "I {{event}} Work Screen Time because: {{reason}}\n{{snoozeDetail}}",
+        messageTemplate: String = "I {{event}} Work Screen Time {{duration}} because: {{reason}}\n{{snoozeDetail}}",
         bodyFields: [AccountabilityWebhookBodyField] = [],
         snoozeNotifyThreshold: Int = AccountabilityTrigger.defaultSnoozeNotifyThreshold
     ) {

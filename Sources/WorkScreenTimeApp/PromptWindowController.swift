@@ -10,7 +10,7 @@ final class PromptWindowController {
     private let config: AppConfig
     private let escalation: EscalationState
     private let photos: [URL]
-    private let onSnooze: (PromptWindowController, String?) -> Void
+    private let onSnooze: (PromptWindowController, Int, String?) -> Void
     private let onDismiss: (PromptWindowController, String?) -> Void
     private let formState: PromptFormState
     private var windows: [NSWindow] = []
@@ -24,7 +24,7 @@ final class PromptWindowController {
         config: AppConfig,
         escalation: EscalationState,
         photos: [URL],
-        onSnooze: @escaping (PromptWindowController, String?) -> Void,
+        onSnooze: @escaping (PromptWindowController, Int, String?) -> Void,
         onDismiss: @escaping (PromptWindowController, String?) -> Void,
         pauseKind: PausePointKind? = nil
     ) {
@@ -55,10 +55,10 @@ final class PromptWindowController {
         windows.removeAll()
     }
 
-    private func finishSnooze(reason: String?) {
+    private func finishSnooze(minutes: Int, reason: String?) {
         guard !didFinish else { return }
         didFinish = true
-        onSnooze(self, reason)
+        onSnooze(self, minutes, reason)
     }
 
     private func finishDismiss(reason: String?) {
@@ -115,7 +115,7 @@ final class PromptWindowController {
             config: config,
             escalation: escalation,
             photos: photos,
-            onSnooze: { [weak self] reason in self?.finishSnooze(reason: reason) },
+            onSnooze: { [weak self] minutes, reason in self?.finishSnooze(minutes: minutes, reason: reason) },
             onDismiss: { [weak self] reason in self?.finishDismiss(reason: reason) },
             formState: formState
         )

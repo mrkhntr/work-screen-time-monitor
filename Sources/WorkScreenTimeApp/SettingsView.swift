@@ -292,7 +292,7 @@ struct SettingsView: View {
                         GridRow {
                             rowLabel("Template")
                             VStack(alignment: .leading, spacing: 6) {
-                                TextField("I {{event}} Work Screen Time because: {{reason}} {{snoozeDetail}}", text: webhookBinding(\.messageTemplate))
+                                TextField("I {{event}} Work Screen Time {{duration}} because: {{reason}} {{snoozeDetail}}", text: webhookBinding(\.messageTemplate))
                                     .textFieldStyle(.roundedBorder)
                                     .frame(width: 420)
                                 templateHelpText
@@ -417,7 +417,7 @@ struct SettingsView: View {
     }
 
     private var templateHelpText: some View {
-        Text("Available: {{message}}, {{reason}}, {{event}}, {{timestamp}}, {{dateKey}}, {{windowID}}, {{snoozeCount}}, {{snoozeMinutes}}, {{snoozeUntil}}, {{snoozeDetail}}, {{app}}")
+        Text("Available: {{message}}, {{reason}}, {{event}}, {{timestamp}}, {{dateKey}}, {{windowID}}, {{snoozeCount}}, {{snoozeMinutes}}, {{snoozeUntil}}, {{duration}}, {{snoozeDetail}}, {{app}}")
             .font(.caption)
             .foregroundStyle(.secondary)
             .textSelection(.enabled)

@@ -32,6 +32,10 @@ let package = Package(
         .testTarget(
             name: "WorkScreenTimeCoreTests",
             dependencies: ["WorkScreenTimeCore"]
+        ),
+        .testTarget(
+            name: "WorkScreenTimeAppTests",
+            dependencies: ["WorkScreenTimeApp", "WorkScreenTimeCore"]
         )
     ]
 )

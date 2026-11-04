@@ -107,6 +107,13 @@ BUILD_CONFIG=debug ./scripts/build_app.sh --no-zip
 WST_PREVIEW_PAUSE=breathe .build/WorkScreenTimeApp.app/Contents/MacOS/WorkScreenTimeApp
 ```
 
+To try the real snooze and dismiss flow without notifying your accountability contact, launch with `--test`: everything behaves normally except that no webhook is sent.
+
+```sh
+BUILD_CONFIG=debug ./scripts/build_app.sh --no-zip
+.build/WorkScreenTimeApp.app/Contents/MacOS/WorkScreenTimeApp --test
+```
+
 The first launch should request notification permission. If you miss it, enable notifications in System Settings.
 
 For unsigned friend/team builds, newer macOS versions may block the first launch. Recommended workarounds:

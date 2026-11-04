@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// Dark tonal palettes with pastel accents (Material-style), one per pause mode plus a neutral one.
@@ -92,26 +91,16 @@ struct PromptPhoto: View {
     let seed: Int
     let palette: PromptPalette
 
-    @State private var localImage: NSImage?
     @State private var tilt: Double = 0
 
+    // The picsum fallback is seeded so every display shows the same photo.
+    private var source: URL? { url ?? URL(string: "https://picsum.photos/seed/wst-\(seed)/440/320") }
+
     var body: some View {
-        Group {
-            if let url {
-                if let localImage {
-                    Image(nsImage: localImage).resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    palette.accent.opacity(0.3)
-                        .task(id: url) { localImage = NSImage(contentsOf: url) }
-                }
-            } else {
-                // Seeded so every display shows the same photo.
-                AsyncImage(url: URL(string: "https://picsum.photos/seed/wst-\(seed)/440/320")) { image in
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: {
-                    palette.accent.opacity(0.3)
-                }
-            }
+        AsyncImage(url: source) { image in
+            image.resizable().aspectRatio(contentMode: .fill)
+        } placeholder: {
+            palette.accent.opacity(0.3)
         }
         .frame(width: 360, height: 260)
         .clipShape(RoundedRectangle(cornerRadius: 36, style: .continuous))
@@ -124,35 +113,31 @@ struct PromptPhoto: View {
     }
 }
 
-/// A text field whose label stays visible above it while typing.
+/// A standard labeled text field that turns green once complete; `isMissing` outlines it in red.
 struct PillField: View {
     let label: String
     var placeholder = ""
     @Binding var text: String
     let isDone: Bool
+    var isMissing = false
     let palette: PromptPalette
+
+    private var outline: Color { isMissing ? .red : isDone ? .green : .clear }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label {
-                Text(label)
-            } icon: {
-                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isDone ? palette.accent : palette.ink.opacity(0.4))
-            }
-            .font(.system(size: 15, weight: .semibold, design: .rounded))
-            .foregroundStyle(palette.ink.opacity(0.85))
-            .padding(.leading, 6)
-            .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isDone)
-
+            Label(label, systemImage: isDone ? "checkmark.circle.fill" : "circle")
+                .font(.system(.headline, design: .rounded))
+                .foregroundStyle(isDone ? .green : palette.ink.opacity(0.85))
             TextField(placeholder, text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 17, weight: .medium, design: .rounded))
-                .foregroundStyle(palette.ink)
-                .padding(.horizontal, 22)
-                .padding(.vertical, 14)
-                .background(palette.ink.opacity(0.08), in: Capsule())
-                .overlay(Capsule().stroke(palette.accent.opacity(isDone ? 0.9 : 0.4), lineWidth: 1.5))
+                .textFieldStyle(.roundedBorder)
+                .font(.system(.title3, design: .rounded))
+                .controlSize(.large)
+                .padding(4)
+                .background(isDone ? Color.green.opacity(0.25) : .clear, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(outline, lineWidth: 2))
+                .animation(.easeOut(duration: 0.2), value: isDone)
+                .animation(.easeOut(duration: 0.2), value: isMissing)
         }
         .frame(width: 460)
     }
@@ -178,7 +163,7 @@ struct CountdownRing: View {
     }
 }
 
-/// A filled pill button; when `requiresHold` it fills while pressed and only fires after a 2 second long press.
+/// A standard prominent button; when `requiresHold` it becomes a custom pill that fills while pressed and only fires after a 2 second long press.
 struct ActionPill: View {
     private static let holdSeconds: Double = 2
 
@@ -188,6 +173,8 @@ struct ActionPill: View {
     var isDefault = false
     let palette: PromptPalette
     let action: () -> Void
+    /// Called when the user tries the button while it is disabled.
+    var onBlockedTap: () -> Void = {}
 
     @State private var holdStartedAt: Date?
 
@@ -201,14 +188,18 @@ struct ActionPill: View {
                     if isEnabled { action() }
                 } onPressingChanged: { isPressing in
                     holdStartedAt = isPressing && isEnabled ? Date() : nil
+                    if isPressing && !isEnabled { onBlockedTap() }
                 }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("Hold to \(title)")
             } else {
-                Button(action: action) { pill(progress: 0) }
-                    .buttonStyle(.plain)
+                // Not `.disabled`, so a tap on an incomplete form can still flag what is missing.
+                Button(title, action: isEnabled ? action : onBlockedTap)
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                    .tint(palette.accent)
+                    .foregroundStyle(palette.onAccent)
                     .keyboardShortcut(isDefault ? .defaultAction : nil)
-                    .disabled(!isEnabled)
             }
         }
         .opacity(isEnabled ? 1 : 0.4)

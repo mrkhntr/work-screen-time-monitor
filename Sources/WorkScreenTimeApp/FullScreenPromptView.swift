@@ -9,7 +9,7 @@ struct FullScreenPromptView: View {
     let config: AppConfig
     let escalation: EscalationState
     let photos: [URL]
-    let onSnooze: (String?) -> Void
+    let onSnooze: (_ minutes: Int, _ reason: String?) -> Void
     let onDismiss: (String?) -> Void
     @ObservedObject var formState: PromptFormState
 
@@ -52,7 +52,7 @@ struct FullScreenPromptView: View {
         switch formState.action {
         case .dismiss:
             return "Dismissing will notify your accountability contact."
-        case .snooze:
+        case .snooze, .quickSnooze:
             let notifies = AccountabilityTrigger.notifiesOnSnooze(
                 totalSnoozesAfter: escalation.snoozeCount + 1,
                 threshold: webhook.snoozeNotifyThreshold
@@ -181,6 +181,7 @@ struct FullScreenPromptView: View {
                     placeholder: escalation.confirmationPhrase,
                     text: $formState.phrase,
                     isDone: phraseDone,
+                    isMissing: formState.showMissing && !phraseDone,
                     palette: palette
                 )
             }
@@ -189,6 +190,7 @@ struct FullScreenPromptView: View {
                 placeholder: "e.g. Fixing checkout before tomorrow\u{2019}s launch",
                 text: $formState.reason,
                 isDone: reasonDone && !reasonText.isEmpty,
+                isMissing: formState.showMissing && !reasonDone,
                 palette: palette
             )
         }
@@ -199,6 +201,7 @@ struct FullScreenPromptView: View {
     private func title(for action: PromptAction) -> String {
         switch action {
         case .snooze: "Snooze \(config.snoozeMinutes) min"
+        case .quickSnooze: "Snooze 1 min"
         case .dismiss: "Dismiss for today"
         }
     }
@@ -206,7 +209,8 @@ struct FullScreenPromptView: View {
     private func perform(_ action: PromptAction) {
         let reason = reasonText.isEmpty ? nil : reasonText
         switch action {
-        case .snooze: onSnooze(reason)
+        case .snooze: onSnooze(config.snoozeMinutes, reason)
+        case .quickSnooze: onSnooze(1, reason)
         case .dismiss: onDismiss(reason)
         }
     }
@@ -219,8 +223,10 @@ struct FullScreenPromptView: View {
                 requiresHold: escalation.requiresHold,
                 isEnabled: canAct,
                 isDefault: true,
-                palette: palette
-            ) { perform(formState.action) }
+                palette: palette,
+                action: { perform(formState.action) },
+                onBlockedTap: { formState.flagMissing() }
+            )
             .id(formState.action)
 
             Menu {
