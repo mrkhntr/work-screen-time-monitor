@@ -14,6 +14,9 @@ struct AccountabilityWebhookEvent: Sendable {
     var windowID: String?
     var snoozeCount: Int?
     var dismissalReason: String?
+    /// For snoozes: how long the snooze lasts and when the prompt returns.
+    var snoozeMinutes: Int? = nil
+    var snoozeUntil: Date? = nil
 }
 
 enum AccountabilityWebhookError: LocalizedError {
@@ -21,6 +24,7 @@ enum AccountabilityWebhookError: LocalizedError {
     case invalidURL
     case invalidBodyTemplate
     case serverError(Int)
+    case redirected(Int, host: String?)
 
     var errorDescription: String? {
         switch self {
@@ -32,6 +36,8 @@ enum AccountabilityWebhookError: LocalizedError {
             "Webhook body template is not valid JSON."
         case .serverError(let statusCode):
             "Webhook returned HTTP \(statusCode)."
+        case .redirected(let statusCode, let host):
+            "Webhook was redirected (HTTP \(statusCode)\(host.map { " to \($0)" } ?? "")) instead of delivered. If this is a Cloudflare Access login page, check the service token headers and policy."
         }
     }
 }
@@ -88,8 +94,12 @@ struct AccountabilityWebhookNotifier {
 
         request.httpBody = try renderedBody(for: event, using: config)
 
-        let (_, response) = try await URLSession.shared.data(for: request)
+        let (_, response) = try await URLSession.shared.data(for: request, delegate: NoRedirectDelegate())
         guard let httpResponse = response as? HTTPURLResponse else { return }
+        if (300..<400).contains(httpResponse.statusCode) {
+            let location = httpResponse.value(forHTTPHeaderField: "Location").flatMap { URL(string: $0)?.host }
+            throw AccountabilityWebhookError.redirected(httpResponse.statusCode, host: location)
+        }
         guard (200..<300).contains(httpResponse.statusCode) else {
             throw AccountabilityWebhookError.serverError(httpResponse.statusCode)
         }
@@ -117,6 +127,10 @@ struct AccountabilityWebhookNotifier {
         if appendsReason, !reason.isEmpty, !template.contains("{{reason}}") {
             rendered += "\nReason: \(reason)"
         }
+        if event.kind == .snoozed, let minutes = event.snoozeMinutes, !template.contains("{{snoozeMinutes}}") {
+            let until = event.snoozeUntil.map { " (prompts again at \($0.formatted(date: .omitted, time: .shortened)))" } ?? ""
+            rendered += "\nSnoozed for \(minutes) min\(until)"
+        }
 
         return rendered
     }
@@ -134,6 +148,8 @@ struct AccountabilityWebhookNotifier {
             "dateKey": event.dateKey,
             "windowID": event.windowID ?? "",
             "snoozeCount": event.snoozeCount.map(String.init) ?? "",
+            "snoozeMinutes": event.snoozeMinutes.map(String.init) ?? "",
+            "snoozeUntil": event.snoozeUntil?.ISO8601Format() ?? "",
             "reason": displayReason,
             "dismissalReason": displayReason
         ]
@@ -155,6 +171,19 @@ struct AccountabilityWebhookNotifier {
             rendered.replaceSubrange(fullRange, with: value)
         }
         return rendered
+    }
+}
+
+/// Stops URLSession from following redirects so a blocked request (e.g. a Cloudflare Access login redirect) is not mistaken for a delivered one.
+private final class NoRedirectDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        completionHandler(nil)
     }
 }
 

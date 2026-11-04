@@ -399,7 +399,9 @@ final class AppModel: ObservableObject {
                 dateKey: controller.dateKey,
                 windowID: controller.downtimeWindow.id,
                 snoozeCount: totalSnoozes,
-                dismissalReason: reason
+                dismissalReason: reason,
+                snoozeMinutes: config.snoozeMinutes,
+                snoozeUntil: until
             )
         }
 
@@ -434,7 +436,9 @@ final class AppModel: ObservableObject {
         dateKey: String,
         windowID: String?,
         snoozeCount: Int?,
-        dismissalReason: String?
+        dismissalReason: String?,
+        snoozeMinutes: Int? = nil,
+        snoozeUntil: Date? = nil
     ) {
         let webhookConfig = config.accountabilityWebhook
         let event = AccountabilityWebhookEvent(
@@ -443,7 +447,9 @@ final class AppModel: ObservableObject {
             dateKey: dateKey,
             windowID: windowID,
             snoozeCount: snoozeCount,
-            dismissalReason: dismissalReason
+            dismissalReason: dismissalReason,
+            snoozeMinutes: snoozeMinutes,
+            snoozeUntil: snoozeUntil
         )
         Task {
             try? await accountabilityWebhookNotifier.send(event, using: webhookConfig)

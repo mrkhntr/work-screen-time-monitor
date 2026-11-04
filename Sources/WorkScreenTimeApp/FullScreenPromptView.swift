@@ -67,6 +67,12 @@ struct FullScreenPromptView: View {
             : "We\u{2019}ll remind you of this halfway through your snooze."
     }
 
+    private var reasonLabel: String {
+        escalation.requiresReason
+            ? "What are you working on, and why tonight? (\(Self.minimumReasonLength)+ characters)"
+            : "Reason (optional)"
+    }
+
     private var holdHint: String? {
         escalation.requiresHold && canAct ? "Press and hold to confirm." : nil
     }
@@ -155,46 +161,39 @@ struct FullScreenPromptView: View {
     }
 
     /// The reflection that earns more time: what's required to snooze or dismiss at this escalation level.
-    @ViewBuilder
     private var checkpoint: some View {
-        if escalation.requiresPhrase || escalation.requiresReason {
-            VStack(alignment: .leading, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Reflect before you keep working")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(palette.ink)
-                    if escalation.requiresReason {
-                        Text(reasonUsage)
-                            .font(.system(size: 14, weight: .medium, design: .rounded))
-                            .foregroundStyle(palette.ink.opacity(0.6))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .padding(.leading, 6)
-                .frame(width: 460, alignment: .leading)
-
-                if escalation.requiresPhrase {
-                    PillField(
-                        label: "Type \u{201C}\(escalation.confirmationPhrase)\u{201D}",
-                        placeholder: escalation.confirmationPhrase,
-                        text: $formState.phrase,
-                        isDone: phraseDone,
-                        palette: palette
-                    )
-                }
-                if escalation.requiresReason {
-                    PillField(
-                        label: "What are you working on, and why tonight? (\(Self.minimumReasonLength)+ characters)",
-                        placeholder: "e.g. Fixing checkout before tomorrow\u{2019}s launch",
-                        text: $formState.reason,
-                        isDone: reasonDone,
-                        palette: palette
-                    )
-                }
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(escalation.requiresReason ? "Reflect before you keep working" : "Add a note")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                    .foregroundStyle(palette.ink)
+                Text(reasonUsage)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(palette.ink.opacity(0.6))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(20)
-            .background(palette.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .padding(.leading, 6)
+            .frame(width: 460, alignment: .leading)
+
+            if escalation.requiresPhrase {
+                PillField(
+                    label: "Type \u{201C}\(escalation.confirmationPhrase)\u{201D}",
+                    placeholder: escalation.confirmationPhrase,
+                    text: $formState.phrase,
+                    isDone: phraseDone,
+                    palette: palette
+                )
+            }
+            PillField(
+                label: reasonLabel,
+                placeholder: "e.g. Fixing checkout before tomorrow\u{2019}s launch",
+                text: $formState.reason,
+                isDone: reasonDone && !reasonText.isEmpty,
+                palette: palette
+            )
         }
+        .padding(20)
+        .background(palette.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
     private func title(for action: PromptAction) -> String {
